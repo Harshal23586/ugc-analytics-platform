@@ -5,33 +5,23 @@ import numpy as np
 st.set_page_config(page_title="UGC Analytics", layout="wide")
 
 def main():
-    st.title("🎓 UGC/AICTE Analytics Platform")
-    st.success("✅ Platform deployed successfully!")
+    st.title("🎓 UGC/AICTE Analytics Platform - LIVE!")
+    st.success("✅ Platform is successfully deployed!")
     
-    # Simple data management
-    st.header("📊 Data Management")
+    st.header("📊 Quick Start")
     
-    uploaded_file = st.file_uploader("Upload CSV/Excel file")
-    if uploaded_file:
-        if uploaded_file.name.endswith('.csv'):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
+    # Sample data demo
+    if st.button("Show Sample Data"):
+        data = {
+            'Institution': [f'Inst_{i}' for i in range(1, 6)],
+            'Performance': [85, 72, 90, 68, 78],
+            'Status': ['Approved', 'Pending', 'Approved', 'Rejected', 'Approved']
+        }
+        df = pd.DataFrame(data)
+        st.dataframe(df)
         
-        st.success(f"Loaded {len(df)} records")
-        st.dataframe(df.head())
-        
-        # Basic analytics
-        st.header("📈 Basic Analytics")
-        st.write(f"**Total Institutions:** {len(df)}")
-        
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) > 0:
-            st.write("**Numerical Columns:**", list(numeric_cols))
-            
-            # Simple statistics
-            for col in numeric_cols[:3]:  # Show first 3 numeric columns
-                st.write(f"- {col}: Mean = {df[col].mean():.2f}")
+        st.metric("Total Institutions", len(df))
+        st.metric("Average Performance", f"{df['Performance'].mean():.1f}")
 
 if __name__ == "__main__":
     main()
