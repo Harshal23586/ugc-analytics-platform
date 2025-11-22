@@ -1,3 +1,24 @@
+# ADD THESE IMPORTS AT THE VERY TOP OF app.py
+import sys
+import os
+try:
+    from distutils import version
+except ImportError:
+    # distutils is deprecated in newer Python, use packaging instead
+    from packaging import version
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime
+import io
+
+# Rest of your code continues...
+
 import streamlit as st
 import pandas as pd
 import numpy as np
