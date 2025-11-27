@@ -9,7 +9,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Add missing imports
-from typing import Dict
+from typing import Dict, List, Tuple
+import json
 
 # Fix PyTorch conflict with Streamlit
 import os
@@ -23,11 +24,133 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+class DocumentComplianceAnalyzer:
+    def __init__(self):
+        self.mandatory_documents = self.get_mandatory_document_list()
+        self.compliance_thresholds = self.get_compliance_thresholds()
+    
+    def get_mandatory_document_list(self) -> List[Dict]:
+        """Define mandatory documents for new technical institutions"""
+        return [
+            {"id": "DOC-001", "name": "Affidavit 2", "category": "Legal", "critical": True},
+            {"id": "DOC-002", "name": "Approved Building Plan", "category": "Infrastructure", "critical": True},
+            {"id": "DOC-003", "name": "Land Ownership/Lease Deed", "category": "Infrastructure", "critical": True},
+            {"id": "DOC-004", "name": "Occupancy/Completion Certificate", "category": "Infrastructure", "critical": True},
+            {"id": "DOC-005", "name": "Fire Safety Certificate", "category": "Safety", "critical": True},
+            {"id": "DOC-006", "name": "Financial Certificate (Bank)", "category": "Financial", "critical": True},
+            {"id": "DOC-007", "name": "Trust/Society/Company Registration", "category": "Legal", "critical": True},
+            {"id": "DOC-008", "name": "Resolution in Format 3", "category": "Administrative", "critical": True},
+            {"id": "DOC-009", "name": "Faculty Roster/List", "category": "Academic", "critical": False},
+            {"id": "DOC-010", "name": "Building Area Statement", "category": "Infrastructure", "critical": False},
+            {"id": "DOC-011", "name": "Structural Stability Certificate", "category": "Infrastructure", "critical": False},
+            {"id": "DOC-012", "name": "Library Inventory", "category": "Academic", "critical": False},
+        ]
+    
+    def get_compliance_thresholds(self) -> Dict:
+        """Define compliance thresholds from AICTE handbook"""
+        return {
+            "faculty_student_ratio_ug_engineering": 20,
+            "faculty_student_ratio_ug_management": 25,
+            "admin_area_min": 750,
+            "amenities_area_min": 500,
+            "internet_bandwidth_0_300": 100,
+            "min_lease_period": 30,
+            "placement_rate_min": 60,
+            "document_sufficiency_min": 85,
+            "infrastructure_score_min": 7,
+            "compliance_score_min": 8
+        }
+    
+    def check_document_presence(self, uploaded_files: List[str]) -> Tuple[pd.DataFrame, bool]:
+        """Check which mandatory documents are present"""
+        document_status = []
+        all_critical_present = True
+        
+        for doc in self.mandatory_documents:
+            status = "Missing"
+            note = "Document not found"
+            
+            # Simulate document checking (in real implementation, this would use file parsing)
+            for uploaded_file in uploaded_files:
+                if doc["name"].lower() in uploaded_file.lower():
+                    status = "Present"
+                    note = "Document verified"
+                    break
+            
+            if doc["critical"] and status == "Missing":
+                all_critical_present = False
+            
+            document_status.append({
+                "Document ID": doc["id"],
+                "Document Name": doc["name"],
+                "Category": doc["category"],
+                "Critical": "Yes" if doc["critical"] else "No",
+                "Status": status,
+                "Note": note
+            })
+        
+        return pd.DataFrame(document_status), all_critical_present
+    
+    def extract_parameter_values(self, document_data: Dict) -> Dict:
+        """Extract actual parameter values from documents (simulated RAG)"""
+        # In real implementation, this would use actual document parsing and RAG
+        extracted_values = {}
+        
+        # Simulate extracted values based on document presence
+        if document_data.get("Faculty Roster", False):
+            extracted_values["faculty_count"] = np.random.randint(30, 100)
+            extracted_values["student_intake"] = np.random.randint(500, 2000)
+            extracted_values["faculty_student_ratio"] = extracted_values["faculty_count"] / extracted_values["student_intake"]
+        
+        if document_data.get("Building Area Statement", False):
+            extracted_values["admin_area"] = np.random.randint(600, 900)
+            extracted_values["amenities_area"] = np.random.randint(400, 700)
+        
+        if document_data.get("Financial Certificate", False):
+            extracted_values["working_capital"] = np.random.randint(5000000, 20000000)
+        
+        return extracted_values
+    
+    def analyze_compliance(self, extracted_values: Dict) -> pd.DataFrame:
+        """Compare extracted values with thresholds"""
+        compliance_results = []
+        
+        parameters = [
+            ("faculty_student_ratio", "Faculty-Student Ratio", "faculty_student_ratio_ug_engineering", "students_per_faculty", "Lower"),
+            ("admin_area", "Administrative Area", "admin_area_min", "sq_m", "Higher"),
+            ("amenities_area", "Amenities Area", "amenities_area_min", "sq_m", "Higher"),
+            ("placement_rate", "Placement Rate", "placement_rate_min", "percentage", "Higher")
+        ]
+        
+        for param_key, param_name, threshold_key, unit, better_direction in parameters:
+            if param_key in extracted_values:
+                actual = extracted_values[param_key]
+                threshold = self.compliance_thresholds.get(threshold_key, 0)
+                
+                if better_direction == "Higher":
+                    is_compliant = actual >= threshold
+                    gap = threshold - actual if actual < threshold else 0
+                else:  # Lower is better
+                    is_compliant = actual <= threshold
+                    gap = actual - threshold if actual > threshold else 0
+                
+                compliance_results.append({
+                    "Parameter": param_name,
+                    "Actual Value": f"{actual:.2f}",
+                    "Threshold": f"{threshold}",
+                    "Status": "Compliant" if is_compliant else "Non-Compliant",
+                    "Gap": f"{gap:.2f}",
+                    "Unit": unit
+                })
+        
+        return pd.DataFrame(compliance_results)
+
 class AdvancedUGC_AICTE_Analytics:
     def __init__(self):
         self.sample_data = self.generate_comprehensive_data()
         self.scaler = StandardScaler()
         self.model = RandomForestClassifier(n_estimators=50, random_state=42)
+        self.compliance_analyzer = DocumentComplianceAnalyzer()
         
     def generate_comprehensive_data(self):
         """Generate comprehensive institutional data"""
@@ -221,6 +344,135 @@ class AdvancedUGC_AICTE_Analytics:
         
         return explanation
 
+def create_document_compliance_module(analytics):
+    st.header("📋 Document Compliance Analyzer")
+    st.info("Two-stage RAG system for document verification and compliance analysis")
+    
+    # Stage 1: Document Upload and Presence Check
+    st.subheader("📤 Stage 1: Document Upload & Verification")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        uploaded_files = st.file_uploader(
+            "Upload Institutional Documents",
+            type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
+            accept_multiple_files=True,
+            help="Upload all required documents for compliance checking"
+        )
+        
+        if uploaded_files:
+            file_names = [file.name for file in uploaded_files]
+            st.success(f"✅ {len(uploaded_files)} files uploaded successfully")
+            
+            # Check document presence
+            document_status_df, all_critical_present = analytics.compliance_analyzer.check_document_presence(file_names)
+            
+            # Display document status
+            st.subheader("📊 Document Status Dashboard")
+            
+            # Create status summary
+            status_summary = document_status_df['Status'].value_counts()
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                total_docs = len(document_status_df)
+                st.metric("Total Documents", total_docs)
+            
+            with col2:
+                present_docs = status_summary.get('Present', 0)
+                st.metric("Documents Present", f"{present_docs}/{total_docs}")
+            
+            with col3:
+                critical_status = "✅ Complete" if all_critical_present else "❌ Incomplete"
+                st.metric("Critical Documents", critical_status)
+            
+            # Display detailed document status
+            st.dataframe(
+                document_status_df.style.apply(
+                    lambda x: ['background-color: #ff6b6b' if v == 'Missing' and x['Critical'] == 'Yes' 
+                              else 'background-color: #d4edda' if v == 'Present' 
+                              else '' for v in x],
+                    axis=1
+                ),
+                use_container_width=True
+            )
+    
+    with col2:
+        st.subheader("ℹ️ Compliance Guidelines")
+        st.write("**Critical Documents:**")
+        st.write("• Affidavit 2")
+        st.write("• Approved Building Plan")
+        st.write("• Land Ownership/Lease Deed")
+        st.write("• Fire Safety Certificate")
+        st.write("• Financial Certificate")
+        
+        st.write("**Important Notes:**")
+        st.write("• All critical documents must be present")
+        st.write("• Lease period: Minimum 30 years")
+        st.write("• Documents must be duly attested")
+    
+    # Stage 2: Compliance Analysis
+    if uploaded_files and all_critical_present:
+        st.subheader("🔍 Stage 2: Compliance Parameter Analysis")
+        
+        # Simulate parameter extraction (in real implementation, this would use RAG)
+        document_data = {doc["name"]: doc["Status"] == "Present" for doc in analytics.compliance_analyzer.mandatory_documents}
+        extracted_values = analytics.compliance_analyzer.extract_parameter_values(document_data)
+        
+        if extracted_values:
+            # Analyze compliance
+            compliance_results = analytics.compliance_analyzer.analyze_compliance(extracted_values)
+            
+            # Display compliance results
+            st.subheader("📈 Compliance Analysis Results")
+            
+            # Compliance metrics
+            compliant_count = len(compliance_results[compliance_results['Status'] == 'Compliant'])
+            total_params = len(compliance_results)
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Compliance Score", f"{compliant_count}/{total_params}")
+            with col2:
+                compliance_rate = (compliant_count / total_params) * 100
+                st.metric("Compliance Rate", f"{compliance_rate:.1f}%")
+            with col3:
+                non_compliant = total_params - compliant_count
+                st.metric("Issues Found", non_compliant)
+            
+            # Display compliance table
+            st.dataframe(
+                compliance_results.style.apply(
+                    lambda x: ['background-color: #d4edda' if v == 'Compliant' else 'background-color: #f8d7da' for v in x],
+                    subset=['Status']
+                ),
+                use_container_width=True
+            )
+            
+            # Generate recommendations
+            st.subheader("💡 AI Recommendations")
+            
+            if non_compliant > 0:
+                st.warning("**🚨 Immediate Actions Required:**")
+                
+                non_compliant_params = compliance_results[compliance_results['Status'] == 'Non-Compliant']
+                for _, row in non_compliant_params.iterrows():
+                    st.write(f"• **{row['Parameter']}**: Gap of {row['Gap']} {row['Unit']} below threshold")
+                
+                st.info("**📋 Suggested Improvements:**")
+                st.write("• Review and update faculty recruitment strategy")
+                st.write("• Enhance infrastructure facilities as per AICTE norms")
+                st.write("• Strengthen industry partnerships for placements")
+            else:
+                st.success("✅ All parameters are compliant with AICTE standards!")
+                
+        else:
+            st.warning("Unable to extract sufficient data from documents for compliance analysis.")
+    
+    elif uploaded_files and not all_critical_present:
+        st.error("❌ Critical documents are missing. Please upload all required critical documents to proceed with compliance analysis.")
+
 def create_enhanced_dashboard(df):
     st.header("🏢 Institutional Intelligence Dashboard")
     
@@ -284,45 +536,12 @@ def create_enhanced_dashboard(df):
             default=sorted(df['naac_grade'].unique())
         )
     
-    # Additional filters
-    filter_col5, filter_col6, filter_col7, filter_col8 = st.columns(4)
-    
-    with filter_col5:
-        min_placement = st.slider(
-            "Min Placement Rate (%)",
-            min_value=60, max_value=95, value=60
-        )
-    
-    with filter_col6:
-        min_infra = st.slider(
-            "Min Infrastructure Score",
-            min_value=3.0, max_value=10.0, value=3.0, step=0.5
-        )
-    
-    with filter_col7:
-        risk_levels = st.multiselect(
-            "Risk Level",
-            options=df['risk_level'].unique(),
-            default=df['risk_level'].unique()
-        )
-    
-    with filter_col8:
-        approval_statuses = st.multiselect(
-            "Approval Status",
-            options=df['approval_status'].unique(),
-            default=df['approval_status'].unique()
-        )
-    
     # Apply filters
     filtered_df = df[
         (df['institution_type'].isin(institution_types)) &
         (df['ownership'].isin(ownership_types)) &
         (df['state'].isin(states)) &
-        (df['naac_grade'].isin(naac_grades)) &
-        (df['placement_rate'] >= min_placement) &
-        (df['infrastructure_score'] >= min_infra) &
-        (df['risk_level'].isin(risk_levels)) &
-        (df['approval_status'].isin(approval_statuses))
+        (df['naac_grade'].isin(naac_grades))
     ]
     
     st.info(f"📊 Showing {len(filtered_df)} out of {len(df)} institutions")
@@ -332,9 +551,6 @@ def create_enhanced_dashboard(df):
         return
     
     # Main Visualization Grid
-    st.subheader("📈 Comprehensive Institutional Analytics")
-    
-    # Row 1: Key Performance Indicators
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -365,24 +581,8 @@ def create_enhanced_dashboard(df):
         st.plotly_chart(fig2, use_container_width=True)
     
     with col3:
-        # NAAC Grade Distribution
-        naac_counts = filtered_df['naac_grade'].value_counts()
-        fig3 = px.bar(
-            x=naac_counts.index,
-            y=naac_counts.values,
-            title="NAAC Grade Distribution",
-            color=naac_counts.values,
-            color_continuous_scale='Viridis'
-        )
-        fig3.update_layout(showlegend=False)
-        st.plotly_chart(fig3, use_container_width=True)
-    
-    # Row 2: Performance Metrics
-    col1, col2 = st.columns(2)
-    
-    with col1:
         # Placement Rate vs Infrastructure Score
-        fig4 = px.scatter(
+        fig3 = px.scatter(
             filtered_df,
             x='infrastructure_score',
             y='placement_rate',
@@ -392,170 +592,7 @@ def create_enhanced_dashboard(df):
             title="Placement Rate vs Infrastructure Score",
             color_discrete_map={'Approved': '#2ecc71', 'Pending': '#f39c12', 'Rejected': '#e74c3c'}
         )
-        fig4.update_layout(
-            xaxis_title="Infrastructure Score (/10)",
-            yaxis_title="Placement Rate (%)"
-        )
-        st.plotly_chart(fig4, use_container_width=True)
-    
-    with col2:
-        # Compliance Score Distribution by Institution Type
-        fig5 = px.box(
-            filtered_df,
-            x='institution_type',
-            y='compliance_score',
-            color='ownership',
-            title="Compliance Score by Institution Type & Ownership",
-            points="all"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
-    
-    # Row 3: Geographic and Temporal Analysis
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Performance by State
-        state_performance = filtered_df.groupby('state').agg({
-            'approval_probability': 'mean',
-            'placement_rate': 'mean',
-            'institution_id': 'count'
-        }).reset_index()
-        
-        fig6 = px.bar(
-            state_performance.nlargest(10, 'institution_id'),
-            x='state',
-            y='approval_probability',
-            color='placement_rate',
-            title="Top 10 States by Approval Probability",
-            hover_data=['institution_id'],
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig6, use_container_width=True)
-    
-    with col2:
-        # Performance Trend by Establishment Year
-        filtered_df['establishment_decade'] = (filtered_df['established_year'] // 10) * 10
-        decade_stats = filtered_df.groupby('establishment_decade').agg({
-            'approval_probability': 'mean',
-            'placement_rate': 'mean',
-            'infrastructure_score': 'mean',
-            'institution_id': 'count'
-        }).reset_index()
-        
-        fig7 = go.Figure()
-        fig7.add_trace(go.Scatter(
-            x=decade_stats['establishment_decade'],
-            y=decade_stats['approval_probability'],
-            mode='lines+markers',
-            name='Approval Probability',
-            line=dict(color='#3498db', width=3)
-        ))
-        fig7.add_trace(go.Scatter(
-            x=decade_stats['establishment_decade'],
-            y=decade_stats['placement_rate']/100,
-            mode='lines+markers',
-            name='Placement Rate (scaled)',
-            line=dict(color='#e74c3c', width=3)
-        ))
-        fig7.update_layout(
-            title="Performance Trends by Establishment Decade",
-            xaxis_title="Establishment Decade",
-            yaxis_title="Score (Normalized)",
-            showlegend=True
-        )
-        st.plotly_chart(fig7, use_container_width=True)
-    
-    # Row 4: Detailed Analysis
-    st.subheader("🔬 Detailed Performance Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Correlation Heatmap
-        numeric_cols = ['approval_probability', 'placement_rate', 'infrastructure_score', 
-                       'compliance_score', 'research_publications', 'document_sufficiency']
-        corr_matrix = filtered_df[numeric_cols].corr()
-        
-        fig8 = px.imshow(
-            corr_matrix,
-            title="Performance Metrics Correlation Matrix",
-            aspect="auto",
-            color_continuous_scale='RdBu_r',
-            zmin=-1, zmax=1
-        )
-        st.plotly_chart(fig8, use_container_width=True)
-    
-    with col2:
-        # Faculty-Student Ratio Analysis
-        filtered_df['faculty_category'] = pd.cut(
-            filtered_df['faculty_student_ratio'],
-            bins=[0, 0.02, 0.05, 0.1, 1],
-            labels=['Very Low (<0.02)', 'Low (0.02-0.05)', 'Good (0.05-0.1)', 'Excellent (>0.1)']
-        )
-        
-        faculty_stats = filtered_df.groupby('faculty_category').agg({
-            'approval_probability': 'mean',
-            'placement_rate': 'mean',
-            'institution_id': 'count'
-        }).reset_index()
-        
-        fig9 = px.bar(
-            faculty_stats,
-            x='faculty_category',
-            y='approval_probability',
-            color='placement_rate',
-            title="Approval Probability by Faculty-Student Ratio",
-            hover_data=['institution_id'],
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig9, use_container_width=True)
-    
-    # Row 5: Institutional Comparison
-    st.subheader("🏆 Institutional Leaderboard")
-    
-    # Top and Bottom Performers
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**🥇 Top 10 Performing Institutions**")
-        top_performers = filtered_df.nlargest(10, 'approval_probability')[
-            ['institution_name', 'institution_type', 'naac_grade', 'approval_probability', 'placement_rate']
-        ]
-        top_performers['approval_probability'] = top_performers['approval_probability'].apply(lambda x: f"{x:.1%}")
-        top_performers['placement_rate'] = top_performers['placement_rate'].apply(lambda x: f"{x:.1f}%")
-        st.dataframe(top_performers, use_container_width=True)
-    
-    with col2:
-        st.write("**📉 Institutions Needing Improvement**")
-        bottom_performers = filtered_df.nsmallest(10, 'approval_probability')[
-            ['institution_name', 'institution_type', 'naac_grade', 'approval_probability', 'risk_level']
-        ]
-        bottom_performers['approval_probability'] = bottom_performers['approval_probability'].apply(lambda x: f"{x:.1%}")
-        st.dataframe(bottom_performers, use_container_width=True)
-    
-    # Row 6: Export and Detailed View
-    st.subheader("📤 Export & Detailed Analysis")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        if st.button("📊 Generate Detailed Report"):
-            st.success("Detailed report generated! (This would typically export to PDF/Excel)")
-    
-    with col2:
-        # Quick statistics
-        st.write("**📈 Quick Stats:**")
-        st.write(f"• Highest Placement: {filtered_df['placement_rate'].max():.1f}%")
-        st.write(f"• Best Infrastructure: {filtered_df['infrastructure_score'].max():.1f}/10")
-        st.write(f"• Top NAAC Grade: {filtered_df['naac_grade'].mode()[0]}")
-    
-    with col3:
-        # Risk analysis
-        high_risk_count = len(filtered_df[filtered_df['risk_level'] == 'High'])
-        if high_risk_count > 0:
-            st.warning(f"🚨 {high_risk_count} high-risk institutions need immediate attention")
-        else:
-            st.success("✅ No high-risk institutions in current selection")
+        st.plotly_chart(fig3, use_container_width=True)
 
 def create_recommendation_engine(df, analytics):
     st.header("💡 AI-Powered Recommendation Engine")
@@ -597,11 +634,6 @@ def create_recommendation_engine(df, analytics):
                 st.info("**🎯 Strategic Improvements:**")
                 for improvement in recommendations["strategic_improvements"]:
                     st.write(f"• {improvement}")
-            
-            if recommendations["compliance_suggestions"]:
-                st.info("**📋 Compliance & Documentation:**")
-                for suggestion in recommendations["compliance_suggestions"]:
-                    st.write(f"• {suggestion}")
     
     with col2:
         # Quick AI assessment
@@ -617,80 +649,6 @@ def create_recommendation_engine(df, analytics):
             risk_level = explanation['risk_level']
             risk_color = "🟢" if risk_level == 'Low' else "🟡" if risk_level == 'Medium' else "🔴"
             st.metric("Risk Level", f"{risk_color} {risk_level}")
-            
-            st.write("**🎯 Key Factors:**")
-            for factor, importance in explanation['key_factors'][:3]:
-                st.write(f"• {factor}")
-
-def create_rag_system():
-    st.header("🔍 Guidelines Query System")
-    
-    st.success("Query UGC/AICTE guidelines and regulations.")
-    
-    # Simple knowledge base
-    guidelines_db = {
-        "Faculty Requirements": [
-            "Minimum 1:20 faculty-student ratio for undergraduate programs",
-            "At least 30% of faculty should hold PhD degrees",
-            "Faculty must have minimum 3 years of teaching experience"
-        ],
-        "Infrastructure Standards": [
-            "Digital classrooms with smart boards and projectors required",
-            "Library must have minimum 5000 books and digital resources",
-            "Laboratories should have modern equipment less than 5 years old"
-        ],
-        "Placement Criteria": [
-            "Minimum 60% placement rate for technical institutions",
-            "Industry collaborations and MoUs are mandatory",
-            "Career guidance and placement cell must be established"
-        ],
-        "Documentation": [
-            "Complete land and building documents required",
-            "Faculty qualification certificates must be verified",
-            "Financial statements for last 3 years audited by CA"
-        ],
-        "Compliance": [
-            "Must meet all statutory UGC/AICTE requirements",
-            "Regular audits and inspections will be conducted",
-            "Student feedback mechanism with 70%+ satisfaction required"
-        ]
-    }
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Query interface
-        query = st.text_input("Search guidelines:", 
-                            placeholder="e.g., faculty qualification requirements")
-        
-        if st.button("🔍 Search Guidelines") and query:
-            st.subheader("📚 Relevant Guidelines:")
-            
-            found_results = False
-            for category, guidelines in guidelines_db.items():
-                for guideline in guidelines:
-                    if query.lower() in guideline.lower():
-                        if not found_results:
-                            found_results = True
-                        with st.expander(f"📄 {category}"):
-                            st.write(guideline)
-            
-            if not found_results:
-                st.warning("No relevant guidelines found. Try different keywords.")
-    
-    with col2:
-        st.subheader("💡 Sample Queries")
-        sample_queries = [
-            "Faculty student ratio",
-            "Infrastructure standards", 
-            "NAAC accreditation",
-            "Document requirements",
-            "Placement criteria"
-        ]
-        
-        for sample in sample_queries:
-            if st.button(sample):
-                st.session_state.last_query = sample
 
 def create_predictive_analytics(analytics):
     st.header("🔮 Predictive Analytics")
@@ -708,7 +666,6 @@ def create_predictive_analytics(analytics):
             infrastructure_score = st.slider("Infrastructure Score", 5.0, 10.0, 7.0)
             compliance_score = st.slider("Compliance Score", 6.0, 10.0, 8.0)
             document_sufficiency = st.slider("Document Sufficiency (%)", 70.0, 100.0, 85.0)
-            research_publications = st.number_input("Research Publications", 0, 1000, 50)
             
             submitted = st.form_submit_button("🚀 Predict Approval")
             
@@ -718,8 +675,7 @@ def create_predictive_analytics(analytics):
                     'placement_rate': placement_rate,
                     'infrastructure_score': infrastructure_score,
                     'compliance_score': compliance_score,
-                    'document_sufficiency': document_sufficiency,
-                    'research_publications': research_publications
+                    'document_sufficiency': document_sufficiency
                 }
                 
                 explanation = analytics.predict_with_explanation(institution_data)
@@ -737,33 +693,6 @@ def create_predictive_analytics(analytics):
                     st.error("**⚠️ Improvements Needed:**")
                     for weakness in explanation['weaknesses']:
                         st.write(f"• {weakness}")
-    
-    with col2:
-        st.subheader("Model Insights")
-        
-        # Simple feature importance
-        features_importance = {
-            "NAAC Grade": 30,
-            "Placement Rate": 25, 
-            "Infrastructure": 20,
-            "Compliance": 15,
-            "Documentation": 10
-        }
-        
-        fig = px.bar(
-            x=list(features_importance.values()), 
-            y=list(features_importance.keys()),
-            orientation='h',
-            title="Feature Importance in Approval Prediction",
-            color=list(features_importance.values()),
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.write("**📊 Prediction Guidelines:**")
-        st.write("• **>70%**: High approval chance")
-        st.write("• **50-70%**: Requires improvements")  
-        st.write("• **<50%**: Significant issues detected")
 
 def main():
     st.markdown("""
@@ -798,17 +727,17 @@ def main():
     # Sidebar
     st.sidebar.title("🤖 AI Navigation Panel")
     app_mode = st.sidebar.selectbox("Choose AI Module", 
-        ["🏢 Institutional Dashboard", "💡 AI Recommendation Engine", "🔍 Guidelines Query", 
+        ["📋 Document Compliance", "🏢 Institutional Dashboard", "💡 AI Recommendation Engine", 
          "🔮 Predictive Analytics"])
     
-    if app_mode == "🏢 Institutional Dashboard":
+    if app_mode == "📋 Document Compliance":
+        create_document_compliance_module(analytics)
+    
+    elif app_mode == "🏢 Institutional Dashboard":
         create_enhanced_dashboard(df)
     
     elif app_mode == "💡 AI Recommendation Engine":
         create_recommendation_engine(df, analytics)
-    
-    elif app_mode == "🔍 Guidelines Query":
-        create_rag_system()
     
     elif app_mode == "🔮 Predictive Analytics":
         create_predictive_analytics(analytics)
