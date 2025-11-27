@@ -29,7 +29,6 @@ except ImportError:
 try:
     from sentence_transformers import SentenceTransformer
     import chromadb
-    from chromadb.config import Settings
     RAG_AVAILABLE = True
 except ImportError:
     RAG_AVAILABLE = False
@@ -59,14 +58,14 @@ class AdvancedUGC_AICTE_Analytics:
                 # Initialize sentence transformer for embeddings
                 self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
                 
-                # Initialize ChromaDB for document storage
-                self.chroma_client = chromadb.Client(Settings(
-                    chroma_db_impl="duckdb+parquet",
-                    persist_directory="./.chroma_db"
-                ))
+                # Initialize ChromaDB with new client configuration
+                self.chroma_client = chromadb.PersistentClient(path="./.chroma_db")
                 
                 # Create or get collection
-                self.collection = self.chroma_client.get_or_create_collection("ugc_aicte_guidelines")
+                self.collection = self.chroma_client.get_or_create_collection(
+                    name="ugc_aicte_guidelines",
+                    metadata={"description": "UGC/AICTE guidelines and regulations"}
+                )
                 
                 # Preload with comprehensive guidelines
                 self.initialize_comprehensive_knowledge_base()
@@ -76,7 +75,7 @@ class AdvancedUGC_AICTE_Analytics:
                 self.initialize_fallback_knowledge_base()
                 
         except Exception as e:
-            st.warning(f"Advanced RAG system initialization warning: {e}")
+            st.warning(f"Advanced RAG system initialization: {e}")
             self.initialize_fallback_knowledge_base()
     
     def initialize_fallback_knowledge_base(self):
@@ -131,16 +130,37 @@ class AdvancedUGC_AICTE_Analytics:
                 "document": "Document Requirements Checklist",
                 "content": "Required documents: Affiliation certificates, Land documents, Building approval plans, Faculty qualifications, Financial statements, Infrastructure details, Academic calendar, Research publications, Industry MoUs, Student placement records.",
                 "category": "documentation"
+            },
+            {
+                "document": "Compliance Verification Framework",
+                "content": "Checklist: Statutory compliance, Faculty qualifications, Infrastructure adequacy, Financial stability, Academic records, Research output, Student feedback mechanism, Governance structure, Industry collaborations, Placement records.",
+                "category": "compliance"
+            },
+            {
+                "document": "Research and Innovation Guidelines",
+                "content": "Institutions should have minimum 5 research publications per 10 faculty members annually. Patent filings encouraged. Industry-sponsored research projects given additional weightage in approval process.",
+                "category": "research_innovation"
+            },
+            {
+                "document": "Infrastructure Standards",
+                "content": "Minimum requirements: Classrooms (15 sq ft per student), Library (25 books per student), Laboratories (30 sq ft per student), Hostels (60 sq ft per student), Sports facilities (5 acres for 1000 students).",
+                "category": "infrastructure"
             }
         ]
         
-        # Add to vector database
-        for i, guideline in enumerate(guidelines):
-            self.collection.add(
-                documents=[guideline["content"]],
-                metadatas=[{"category": guideline["category"], "document": guideline["document"]}],
-                ids=[f"guideline_{i}"]
-            )
+        # Check if collection is empty before adding documents
+        try:
+            existing_count = self.collection.count()
+            if existing_count == 0:
+                # Add to vector database
+                for i, guideline in enumerate(guidelines):
+                    self.collection.add(
+                        documents=[guideline["content"]],
+                        metadatas=[{"category": guideline["category"], "document": guideline["document"]}],
+                        ids=[f"guideline_{i}"]
+                    )
+        except Exception as e:
+            st.warning(f"Knowledge base initialization: {e}")
     
     def query_rag_system(self, query: str, n_results: int = 5) -> Dict:
         """Query the RAG system for relevant guidelines"""
@@ -155,12 +175,9 @@ class AdvancedUGC_AICTE_Analytics:
                             results["metadatas"].append([{"category": category, "document": "Fallback Guideline"}])
                 return results
             
-            # Generate query embedding
-            query_embedding = self.embedding_model.encode(query).tolist()
-            
-            # Search similar documents
+            # Search similar documents using new ChromaDB API
             results = self.collection.query(
-                query_embeddings=[query_embedding],
+                query_texts=[query],
                 n_results=n_results
             )
             
