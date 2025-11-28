@@ -900,59 +900,59 @@ class InstitutionalAIAnalyzer:
             WHERE institution_id = ? 
             ORDER BY submitted_date DESC
         ''', self.conn, params=(institution_id,))
-    
+
+
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
         """Generate comprehensive historical data for institutions"""
         np.random.seed(42)
         n_institutions = 200
         years_of_data = 5
-        
+    
         institutions_data = []
-        
+    
         for inst_id in range(1, n_institutions + 1):
             base_quality = np.random.uniform(0.3, 0.9)
-            
+        
             for year_offset in range(years_of_data):
                 year = 2023 - year_offset
                 inst_trend = base_quality + (year_offset * 0.02)
-                
+            
                 # Generate realistic data with proper distributions
                 naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
                 naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
                 naac_grade = np.random.choice(naac_grades, p=naac_probs)
-                
-                # FIXED: Ensure probability array matches choices array size
+            
+                # Ensure all fields have data
                 nirf_choices = list(range(1, 201)) + [None] * 50
-                nirf_probs = [0.005] * 200 + [0.01] * 50  # 200 ranks + 50 None values
-                # Normalize probabilities to sum to 1
+                nirf_probs = [0.005] * 200 + [0.01] * 50
                 nirf_probs = [p / sum(nirf_probs) for p in nirf_probs]
                 nirf_rank = np.random.choice(nirf_choices, p=nirf_probs)
-                
+            
                 student_faculty_ratio = max(10, np.random.normal(20, 5))
-                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3  # Beta distribution for ratios
-                
-                # Research metrics with realistic distributions
-                publications = max(0, int(np.random.poisson(inst_trend * 30)))
-                research_grants = max(0, int(np.random.exponential(inst_trend * 500000)))
-                patents = np.random.poisson(inst_trend * 3)
-                
-                # Infrastructure scores
-                digital_infrastructure_score = max(1, min(10, np.random.normal(7, 1.5)))
-                library_volumes = max(1000, int(np.random.normal(20000, 10000)))
-                
+                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
+            
+                # Research metrics - ensure non-zero values
+                publications = max(5, int(np.random.poisson(inst_trend * 30)))
+                research_grants = max(100000, int(np.random.exponential(inst_trend * 500000)))
+                patents = max(0, int(np.random.poisson(inst_trend * 3)))
+            
+                # Infrastructure scores - ensure valid ranges
+                digital_infrastructure_score = max(3, min(10, np.random.normal(7, 1.5)))
+                library_volumes = max(5000, int(np.random.normal(20000, 10000)))
+            
                 # Governance scores
-                financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
-                compliance_score = max(1, min(10, np.random.normal(8, 1)))
-                
-                # Student development
+                financial_stability = max(4, min(10, np.random.normal(7.5, 1.2)))
+                compliance_score = max(5, min(10, np.random.normal(8, 1)))
+            
+                # Student development - ensure realistic values
                 placement_rate = max(40, min(98, np.random.normal(75, 10)))
                 higher_education_rate = max(5, min(50, np.random.normal(20, 8)))
-                
+            
                 # Social impact
-                community_projects = np.random.poisson(inst_trend * 8)
-                
+                community_projects = max(1, int(np.random.poisson(inst_trend * 8)))
+            
                 # Calculate performance score
-                faculty_count = max(1, np.random.randint(30, 150))
+                faculty_count = max(30, np.random.randint(30, 150))
                 performance_score = self.calculate_performance_score({
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
@@ -965,7 +965,17 @@ class InstitutionalAIAnalyzer:
                     'placement_rate': placement_rate,
                     'community_engagement': community_projects
                 })
-                
+            
+                # Generate risk levels based on performance
+                if performance_score >= 8.0:
+                    risk_level = "Low Risk"
+                elif performance_score >= 6.5:
+                    risk_level = "Medium Risk"
+                elif performance_score >= 5.0:
+                    risk_level = "High Risk"
+                else:
+                    risk_level = "Critical Risk"
+            
                 institution_data = {
                     'institution_id': f'INST_{inst_id:04d}',
                     'institution_name': f'University/College {inst_id:03d}',
@@ -973,55 +983,55 @@ class InstitutionalAIAnalyzer:
                     'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College'], p=[0.3, 0.2, 0.3, 0.2]),
                     'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat'], p=[0.2, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]),
                     'established_year': np.random.randint(1950, 2015),
-                    
+                
                     # Academic Metrics
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
                     'student_faculty_ratio': round(student_faculty_ratio, 1),
                     'phd_faculty_ratio': round(phd_faculty_ratio, 3),
-                    
+                
                     # Research Metrics
                     'research_publications': publications,
                     'research_grants_amount': research_grants,
                     'patents_filed': patents,
-                    'industry_collaborations': np.random.poisson(inst_trend * 6),
-                    
+                    'industry_collaborations': max(1, int(np.random.poisson(inst_trend * 6))),
+                
                     # Infrastructure Metrics
                     'digital_infrastructure_score': round(digital_infrastructure_score, 1),
                     'library_volumes': library_volumes,
-                    'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
-                    
+                    'laboratory_equipment_score': round(max(3, min(10, np.random.normal(7, 1.3))), 1),
+                
                     # Governance Metrics
                     'financial_stability_score': round(financial_stability, 1),
                     'compliance_score': round(compliance_score, 1),
-                    'administrative_efficiency': round(max(1, min(10, np.random.normal(7.2, 1.1))), 1),
-                    
+                    'administrative_efficiency': round(max(4, min(10, np.random.normal(7.2, 1.1))), 1),
+                
                     # Student Development Metrics
                     'placement_rate': round(placement_rate, 1),
                     'higher_education_rate': round(higher_education_rate, 1),
-                    'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
-                    
+                    'entrepreneurship_cell_score': round(max(3, min(10, np.random.normal(6.5, 1.5))), 1),
+                
                     # Social Impact Metrics
                     'community_projects': community_projects,
-                    'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
-                    'inclusive_education_index': round(max(1, min(10, np.random.normal(7.5, 1.2))), 1),
-                    
+                    'rural_outreach_score': round(max(3, min(10, np.random.normal(6.8, 1.4))), 1),
+                    'inclusive_education_index': round(max(4, min(10, np.random.normal(7.5, 1.2))), 1),
+                
                     # Government Schemes Participation
                     'rusa_participation': np.random.choice([0, 1], p=[0.4, 0.6]),
                     'nmeict_participation': np.random.choice([0, 1], p=[0.5, 0.5]),
                     'fist_participation': np.random.choice([0, 1], p=[0.6, 0.4]),
                     'dst_participation': np.random.choice([0, 1], p=[0.7, 0.3]),
-                    
+                
                     # Overall Performance
                     'performance_score': round(performance_score, 2),
                     'approval_recommendation': self.generate_approval_recommendation(performance_score),
-                    'risk_level': self.assess_risk_level(performance_score)
+                    'risk_level': risk_level
                 }
-                
+            
                 institutions_data.append(institution_data)
-        
-        return pd.DataFrame(institutions_data)
     
+        return pd.DataFrame(institutions_data)
+        
     def calculate_performance_score(self, metrics: Dict) -> float:
         """Calculate overall performance score based on weighted metrics"""
         score = 0
@@ -1716,7 +1726,7 @@ def create_performance_dashboard(analyzer):
         st.metric("Average Placement Rate", f"{avg_placement:.1f}%")
     
     with col5:
-        research_intensity = current_year_data['research_publications'].sum() / current_year_data['research_publications'].count()
+        research_intensity = current_year_data['research_publications'].sum() / len(current_year_data)
         st.metric("Avg Research Publications", f"{research_intensity:.1f}")
     
     # Performance Analysis
@@ -1725,57 +1735,72 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Performance Distribution
-        fig1 = px.histogram(
-            current_year_data, 
-            x='performance_score',
-            title="Distribution of Institutional Performance Scores",
-            nbins=20,
-            color_discrete_sequence=['#1f77b4'],
-            opacity=0.8
-        )
-        fig1.update_layout(
-            xaxis_title="Performance Score", 
-            yaxis_title="Number of Institutions",
-            showlegend=False
-        )
-        st.plotly_chart(fig1, use_container_width=True)
+        # Performance Distribution - FIXED
+        if not current_year_data['performance_score'].empty:
+            fig1 = px.histogram(
+                current_year_data, 
+                x='performance_score',
+                title="Distribution of Institutional Performance Scores",
+                nbins=20,
+                color_discrete_sequence=['#1f77b4'],
+                opacity=0.8
+            )
+            fig1.update_layout(
+                xaxis_title="Performance Score", 
+                yaxis_title="Number of Institutions",
+                showlegend=False
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("No performance score data available for histogram")
     
     with col2:
-        # Performance by Institution Type
-        fig2 = px.box(
-            current_year_data,
-            x='institution_type',
-            y='performance_score',
-            title="Performance Score by Institution Type",
-            color='institution_type'
-        )
-        fig2.update_layout(
-            xaxis_title="Institution Type",
-            yaxis_title="Performance Score",
-            showlegend=False
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+        # Performance by Institution Type - FIXED
+        if not current_year_data.empty and 'institution_type' in current_year_data.columns:
+            # Remove any empty institution types
+            filtered_data = current_year_data.dropna(subset=['institution_type', 'performance_score'])
+            if not filtered_data.empty:
+                fig2 = px.box(
+                    filtered_data,
+                    x='institution_type',
+                    y='performance_score',
+                    title="Performance Score by Institution Type",
+                    color='institution_type'
+                )
+                fig2.update_layout(
+                    xaxis_title="Institution Type",
+                    yaxis_title="Performance Score",
+                    showlegend=False
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.info("No data available for performance by institution type")
+        else:
+            st.info("Institution type data not available")
     
-    # Trend Analysis
+    # Trend Analysis - FIXED
     st.subheader("📅 Historical Performance Trends")
     
+    # Ensure we have multiple years of data
     trend_data = df.groupby(['year', 'institution_type'])['performance_score'].mean().reset_index()
     
-    fig3 = px.line(
-        trend_data,
-        x='year',
-        y='performance_score',
-        color='institution_type',
-        title="Average Performance Score Trend (2019-2023)",
-        markers=True
-    )
-    fig3.update_layout(
-        xaxis_title="Year", 
-        yaxis_title="Average Performance Score",
-        legend_title="Institution Type"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+    if len(trend_data) > 1 and not trend_data.empty:
+        fig3 = px.line(
+            trend_data,
+            x='year',
+            y='performance_score',
+            color='institution_type',
+            title="Average Performance Score Trend (2019-2023)",
+            markers=True
+        )
+        fig3.update_layout(
+            xaxis_title="Year", 
+            yaxis_title="Average Performance Score",
+            legend_title="Institution Type"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.info("Insufficient data for trend analysis")
     
     # Risk Analysis
     st.subheader("⚠️ Institutional Risk Analysis")
@@ -1783,43 +1808,51 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
+        # Risk Distribution Pie Chart - FIXED
         risk_distribution = current_year_data['risk_level'].value_counts()
-        fig4 = px.pie(
-            values=risk_distribution.values,
-            names=risk_distribution.index,
-            title="Institutional Risk Level Distribution",
-            color=risk_distribution.index,
-            color_discrete_map={
-                'Low Risk': '#2ecc71',
-                'Medium Risk': '#f39c12',
-                'High Risk': '#e74c3c',
-                'Critical Risk': '#c0392b'
-            }
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+        if not risk_distribution.empty:
+            fig4 = px.pie(
+                values=risk_distribution.values,
+                names=risk_distribution.index,
+                title="Institutional Risk Level Distribution",
+                color=risk_distribution.index,
+                color_discrete_map={
+                    'Low Risk': '#2ecc71',
+                    'Medium Risk': '#f39c12',
+                    'High Risk': '#e74c3c',
+                    'Critical Risk': '#c0392b'
+                }
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("No risk level data available")
     
     with col2:
-        # Placement vs Research Analysis
-        fig5 = px.scatter(
-            current_year_data,
-            x='research_publications',
-            y='placement_rate',
-            color='risk_level',
-            size='performance_score',
-            hover_data=['institution_name'],
-            title="Research Output vs Placement Rate",
-            color_discrete_map={
-                'Low Risk': '#2ecc71',
-                'Medium Risk': '#f39c12',
-                'High Risk': '#e74c3c',
-                'Critical Risk': '#c0392b'
-            }
-        )
-        fig5.update_layout(
-            xaxis_title="Research Publications",
-            yaxis_title="Placement Rate (%)"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
+        # Placement vs Research Analysis - FIXED
+        scatter_data = current_year_data.dropna(subset=['research_publications', 'placement_rate', 'risk_level'])
+        if not scatter_data.empty:
+            fig5 = px.scatter(
+                scatter_data,
+                x='research_publications',
+                y='placement_rate',
+                color='risk_level',
+                size='performance_score',
+                hover_data=['institution_name'],
+                title="Research Output vs Placement Rate",
+                color_discrete_map={
+                    'Low Risk': '#2ecc71',
+                    'Medium Risk': '#f39c12',
+                    'High Risk': '#e74c3c',
+                    'Critical Risk': '#c0392b'
+                }
+            )
+            fig5.update_layout(
+                xaxis_title="Research Publications",
+                yaxis_title="Placement Rate (%)"
+            )
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("No data available for research vs placement analysis")
     
     # Additional Visualizations
     st.subheader("🎯 Additional Insights")
@@ -1827,38 +1860,49 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
-        # State-wise Performance
-        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False).head(10)
-        fig6 = px.bar(
-            x=state_performance.index,
-            y=state_performance.values,
-            title="Top 10 States by Average Performance Score",
-            color=state_performance.values,
-            color_continuous_scale='Viridis'
-        )
-        fig6.update_layout(
-            xaxis_title="State",
-            yaxis_title="Average Performance Score",
-            showlegend=False
-        )
-        st.plotly_chart(fig6, use_container_width=True)
+        # State-wise Performance - FIXED
+        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False)
+        if not state_performance.empty:
+            # Take top 10 states with valid data
+            top_states = state_performance.dropna().head(10)
+            if not top_states.empty:
+                fig6 = px.bar(
+                    x=top_states.index,
+                    y=top_states.values,
+                    title="Top 10 States by Average Performance Score",
+                    color=top_states.values,
+                    color_continuous_scale='Viridis'
+                )
+                fig6.update_layout(
+                    xaxis_title="State",
+                    yaxis_title="Average Performance Score",
+                    showlegend=False
+                )
+                st.plotly_chart(fig6, use_container_width=True)
+            else:
+                st.info("No state performance data available")
+        else:
+            st.info("No state data available")
     
     with col2:
-        # NAAC Grade Distribution
+        # NAAC Grade Distribution - FIXED
         naac_dist = current_year_data['naac_grade'].value_counts()
-        fig7 = px.bar(
-            x=naac_dist.index,
-            y=naac_dist.values,
-            title="NAAC Grade Distribution",
-            color=naac_dist.index,
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig7.update_layout(
-            xaxis_title="NAAC Grade",
-            yaxis_title="Number of Institutions",
-            showlegend=False
-        )
-        st.plotly_chart(fig7, use_container_width=True)
+        if not naac_dist.empty:
+            fig7 = px.bar(
+                x=naac_dist.index,
+                y=naac_dist.values,
+                title="NAAC Grade Distribution",
+                color=naac_dist.index,
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig7.update_layout(
+                xaxis_title="NAAC Grade",
+                yaxis_title="Number of Institutions",
+                showlegend=False
+            )
+            st.plotly_chart(fig7, use_container_width=True)
+        else:
+            st.info("No NAAC grade data available")
 
 def create_document_analysis_module(analyzer):
     st.header("📋 AI-Powered Document Sufficiency Analysis")
