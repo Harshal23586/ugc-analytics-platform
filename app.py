@@ -14,6 +14,9 @@ from datetime import datetime, timedelta
 import json
 from typing import Dict, List, Tuple, Any
 import hashlib
+import sqlite3
+import io
+import base64
 
 # Page configuration
 st.set_page_config(
@@ -25,10 +28,88 @@ st.set_page_config(
 
 class InstitutionalAIAnalyzer:
     def __init__(self):
-        self.historical_data = self.generate_comprehensive_historical_data()
+        self.init_database()
+        self.historical_data = self.load_or_generate_data()
         self.performance_metrics = self.define_performance_metrics()
         self.document_requirements = self.define_document_requirements()
         
+    def init_database(self):
+        """Initialize SQLite database for storing institutional data"""
+        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
+        cursor = self.conn.cursor()
+        
+        # Create institutions table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS institutions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                institution_id TEXT UNIQUE,
+                institution_name TEXT,
+                year INTEGER,
+                institution_type TEXT,
+                state TEXT,
+                established_year INTEGER,
+                naac_grade TEXT,
+                nirf_ranking INTEGER,
+                student_faculty_ratio REAL,
+                phd_faculty_ratio REAL,
+                research_publications INTEGER,
+                research_grants_amount REAL,
+                patents_filed INTEGER,
+                industry_collaborations INTEGER,
+                digital_infrastructure_score REAL,
+                library_volumes INTEGER,
+                laboratory_equipment_score REAL,
+                financial_stability_score REAL,
+                compliance_score REAL,
+                administrative_efficiency REAL,
+                placement_rate REAL,
+                higher_education_rate REAL,
+                entrepreneurship_cell_score REAL,
+                community_projects INTEGER,
+                rural_outreach_score REAL,
+                inclusive_education_index REAL,
+                rusa_participation INTEGER,
+                nmeict_participation INTEGER,
+                fist_participation INTEGER,
+                dst_participation INTEGER,
+                performance_score REAL,
+                approval_recommendation TEXT,
+                risk_level TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create documents table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS institution_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                institution_id TEXT,
+                document_name TEXT,
+                document_type TEXT,
+                file_path TEXT,
+                upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT DEFAULT 'Pending',
+                FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+            )
+        ''')
+        
+        self.conn.commit()
+    
+    def load_or_generate_data(self):
+        """Load data from database or generate sample data"""
+        try:
+            # Try to load from database
+            df = pd.read_sql('SELECT * FROM institutions', self.conn)
+            if len(df) > 0:
+                return df
+        except:
+            pass
+        
+        # Generate sample data if database is empty
+        sample_data = self.generate_comprehensive_historical_data()
+        sample_data.to_sql('institutions', self.conn, if_exists='replace', index=False)
+        return sample_data
+    
     def define_performance_metrics(self) -> Dict[str, Dict]:
         """Define key performance indicators for institutional evaluation"""
         return {
@@ -131,62 +212,54 @@ class InstitutionalAIAnalyzer:
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
         """Generate comprehensive historical data for institutions"""
         np.random.seed(42)
-        n_institutions = 300
+        n_institutions = 200
         years_of_data = 5
         
         institutions_data = []
         
         for inst_id in range(1, n_institutions + 1):
-            base_quality = np.random.uniform(0.3, 0.9)  # Base institutional quality
+            base_quality = np.random.uniform(0.3, 0.9)
             
             for year_offset in range(years_of_data):
                 year = 2023 - year_offset
-                inst_trend = base_quality + (year_offset * 0.02)  # Slight improvement trend
+                inst_trend = base_quality + (year_offset * 0.02)
                 
-                # Academic Excellence
+                # Generate realistic data with proper distributions
                 naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
                 naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
                 naac_grade = np.random.choice(naac_grades, p=naac_probs)
                 
-                nirf_rank = np.random.choice(list(range(1, 201)) + [None]*100)
-                student_faculty_ratio = np.random.uniform(15, 35)
-                phd_faculty_ratio = np.random.uniform(0.3, 0.9)
+                nirf_rank = np.random.choice(list(range(1, 201)) + [None]*50, p=[0.005]*200 + [0.5])
+                student_faculty_ratio = max(10, np.random.normal(20, 5))
+                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3  # Beta distribution for ratios
                 
-                # Research & Innovation
-                publications = np.random.poisson(inst_trend * 50)
-                research_grants = np.random.poisson(inst_trend * 20) * 100000
-                patents = np.random.poisson(inst_trend * 5)
+                # Research metrics with realistic distributions
+                publications = max(0, int(np.random.poisson(inst_trend * 30)))
+                research_grants = max(0, int(np.random.exponential(inst_trend * 500000)))
+                patents = np.random.poisson(inst_trend * 3)
                 
-                # Infrastructure
-                digital_infrastructure_score = np.random.uniform(5, 10)
-                library_volumes = np.random.randint(5000, 50000)
+                # Infrastructure scores
+                digital_infrastructure_score = max(1, min(10, np.random.normal(7, 1.5)))
+                library_volumes = max(1000, int(np.random.normal(20000, 10000)))
                 
-                # Governance
-                financial_stability = np.random.uniform(6, 10)
-                compliance_score = np.random.uniform(7, 10)
+                # Governance scores
+                financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
+                compliance_score = max(1, min(10, np.random.normal(8, 1)))
                 
-                # Student Development
-                placement_rate = np.random.uniform(60, 95)
-                higher_education_rate = np.random.uniform(10, 40)
+                # Student development
+                placement_rate = max(40, min(98, np.random.normal(75, 10)))
+                higher_education_rate = max(5, min(50, np.random.normal(20, 8)))
                 
-                # Social Impact
-                community_projects = np.random.poisson(inst_trend * 10)
+                # Social impact
+                community_projects = np.random.poisson(inst_trend * 8)
                 
-                # Government Schemes Participation
-                scheme_participation = {
-                    'rusa': np.random.choice([0, 1], p=[0.4, 0.6]),
-                    'nmeict': np.random.choice([0, 1], p=[0.5, 0.5]),
-                    'fist': np.random.choice([0, 1], p=[0.6, 0.4]),
-                    'dst_schemes': np.random.choice([0, 1], p=[0.7, 0.3])
-                }
-                
-                # Calculate overall performance score
+                # Calculate performance score
                 performance_score = self.calculate_performance_score({
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
                     'student_faculty_ratio': student_faculty_ratio,
                     'phd_faculty_ratio': phd_faculty_ratio,
-                    'publications_per_faculty': publications / max(1, np.random.randint(50, 200)),
+                    'publications_per_faculty': publications / max(1, np.random.randint(30, 150)),
                     'research_grants': research_grants,
                     'digital_infrastructure': digital_infrastructure_score,
                     'financial_stability': financial_stability,
@@ -194,64 +267,65 @@ class InstitutionalAIAnalyzer:
                     'community_engagement': community_projects
                 })
                 
-                institutions_data.append({
+                institution_data = {
                     'institution_id': f'INST_{inst_id:04d}',
                     'institution_name': f'University/College {inst_id:03d}',
                     'year': year,
-                    'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College']),
-                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh']),
+                    'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College'], p=[0.3, 0.2, 0.3, 0.2]),
+                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat'], p=[0.2, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]),
                     'established_year': np.random.randint(1950, 2015),
                     
                     # Academic Metrics
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
-                    'student_faculty_ratio': student_faculty_ratio,
-                    'phd_faculty_ratio': phd_faculty_ratio,
+                    'student_faculty_ratio': round(student_faculty_ratio, 1),
+                    'phd_faculty_ratio': round(phd_faculty_ratio, 3),
                     
                     # Research Metrics
                     'research_publications': publications,
                     'research_grants_amount': research_grants,
                     'patents_filed': patents,
-                    'industry_collaborations': np.random.poisson(inst_trend * 8),
+                    'industry_collaborations': np.random.poisson(inst_trend * 6),
                     
                     # Infrastructure Metrics
-                    'digital_infrastructure_score': digital_infrastructure_score,
+                    'digital_infrastructure_score': round(digital_infrastructure_score, 1),
                     'library_volumes': library_volumes,
-                    'laboratory_equipment_score': np.random.uniform(6, 10),
+                    'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
                     
                     # Governance Metrics
-                    'financial_stability_score': financial_stability,
-                    'compliance_score': compliance_score,
-                    'administrative_efficiency': np.random.uniform(6, 10),
+                    'financial_stability_score': round(financial_stability, 1),
+                    'compliance_score': round(compliance_score, 1),
+                    'administrative_efficiency': round(max(1, min(10, np.random.normal(7.2, 1.1))), 1),
                     
                     # Student Development Metrics
-                    'placement_rate': placement_rate,
-                    'higher_education_rate': higher_education_rate,
-                    'entrepreneurship_cell_score': np.random.uniform(5, 10),
+                    'placement_rate': round(placement_rate, 1),
+                    'higher_education_rate': round(higher_education_rate, 1),
+                    'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
                     
                     # Social Impact Metrics
                     'community_projects': community_projects,
-                    'rural_outreach_score': np.random.uniform(4, 10),
-                    'inclusive_education_index': np.random.uniform(6, 10),
+                    'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
+                    'inclusive_education_index': round(max(1, min(10, np.random.normal(7.5, 1.2))), 1),
                     
                     # Government Schemes Participation
-                    'rusa_participation': scheme_participation['rusa'],
-                    'nmeict_participation': scheme_participation['nmeict'],
-                    'fist_participation': scheme_participation['fist'],
-                    'dst_participation': scheme_participation['dst_schemes'],
+                    'rusa_participation': np.random.choice([0, 1], p=[0.4, 0.6]),
+                    'nmeict_participation': np.random.choice([0, 1], p=[0.5, 0.5]),
+                    'fist_participation': np.random.choice([0, 1], p=[0.6, 0.4]),
+                    'dst_participation': np.random.choice([0, 1], p=[0.7, 0.3]),
                     
                     # Overall Performance
-                    'performance_score': performance_score,
+                    'performance_score': round(performance_score, 2),
                     'approval_recommendation': self.generate_approval_recommendation(performance_score),
                     'risk_level': self.assess_risk_level(performance_score)
-                })
+                }
+                
+                institutions_data.append(institution_data)
         
         return pd.DataFrame(institutions_data)
     
     def calculate_performance_score(self, metrics: Dict) -> float:
         """Calculate overall performance score based on weighted metrics"""
         score = 0
-        total_weight = 0
         
         # NAAC Grade scoring
         naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
@@ -265,7 +339,7 @@ class InstitutionalAIAnalyzer:
         score += nirf_score * 0.10
         
         # Student-Faculty Ratio (lower is better)
-        sf_ratio_score = max(0, 10 - (metrics['student_faculty_ratio'] - 15) / 2)
+        sf_ratio_score = max(0, 10 - max(0, metrics['student_faculty_ratio'] - 15) / 3)
         score += sf_ratio_score * 0.10
         
         # PhD Faculty Ratio
@@ -273,11 +347,11 @@ class InstitutionalAIAnalyzer:
         score += phd_score * 0.10
         
         # Research Publications
-        pub_score = min(10, metrics['publications_per_faculty'] * 2)
+        pub_score = min(10, metrics['publications_per_faculty'] * 3)
         score += pub_score * 0.10
         
         # Research Grants (log scale)
-        grant_score = min(10, np.log1p(metrics['research_grants'] / 100000) * 2)
+        grant_score = min(10, np.log1p(metrics['research_grants'] / 100000) * 2.5)
         score += grant_score * 0.10
         
         # Infrastructure
@@ -293,7 +367,7 @@ class InstitutionalAIAnalyzer:
         score += placement_score * 0.10
         
         # Community Engagement
-        community_score = min(10, metrics['community_engagement'] / 2)
+        community_score = min(10, metrics['community_engagement'] / 1.5)
         score += community_score * 0.05
         
         return min(10, score)
@@ -322,29 +396,57 @@ class InstitutionalAIAnalyzer:
         else:
             return "Critical Risk"
     
+    def save_uploaded_documents(self, institution_id: str, uploaded_files: List, document_types: List[str]):
+        """Save uploaded documents to database"""
+        cursor = self.conn.cursor()
+        for i, uploaded_file in enumerate(uploaded_files):
+            cursor.execute('''
+                INSERT INTO institution_documents (institution_id, document_name, document_type, status)
+                VALUES (?, ?, ?, ?)
+            ''', (institution_id, uploaded_file.name, document_types[i], 'Uploaded'))
+        self.conn.commit()
+    
+    def get_institution_documents(self, institution_id: str) -> pd.DataFrame:
+        """Get documents for a specific institution"""
+        return pd.read_sql('''
+            SELECT * FROM institution_documents 
+            WHERE institution_id = ? 
+            ORDER BY upload_date DESC
+        ''', self.conn, params=(institution_id,))
+    
     def analyze_document_sufficiency(self, uploaded_docs: List[str], approval_type: str) -> Dict:
         """Analyze document sufficiency percentage"""
         requirements = self.document_requirements[approval_type]
         
-        mandatory_present = sum(1 for doc in requirements['mandatory'] 
-                              if any(doc in uploaded_doc for uploaded_doc in uploaded_docs))
-        supporting_present = sum(1 for doc in requirements['supporting'] 
-                               if any(doc in uploaded_doc for uploaded_doc in uploaded_docs))
+        # Count present documents
+        mandatory_present = 0
+        for doc in requirements['mandatory']:
+            for uploaded_doc in uploaded_docs:
+                if doc.lower() in uploaded_doc.lower():
+                    mandatory_present += 1
+                    break
+        
+        supporting_present = 0
+        for doc in requirements['supporting']:
+            for uploaded_doc in uploaded_docs:
+                if doc.lower() in uploaded_doc.lower():
+                    supporting_present += 1
+                    break
         
         total_mandatory = len(requirements['mandatory'])
         total_supporting = len(requirements['supporting'])
         
-        mandatory_sufficiency = (mandatory_present / total_mandatory) * 100
+        mandatory_sufficiency = (mandatory_present / total_mandatory) * 100 if total_mandatory > 0 else 0
         overall_sufficiency = ((mandatory_present + supporting_present) / 
-                             (total_mandatory + total_supporting)) * 100
+                             (total_mandatory + total_supporting)) * 100 if (total_mandatory + total_supporting) > 0 else 0
         
         return {
             'mandatory_sufficiency': mandatory_sufficiency,
             'overall_sufficiency': overall_sufficiency,
             'missing_mandatory': [doc for doc in requirements['mandatory'] 
-                                if not any(doc in uploaded_doc for uploaded_doc in uploaded_docs)],
+                                if not any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)],
             'missing_supporting': [doc for doc in requirements['supporting'] 
-                                 if not any(doc in uploaded_doc for uploaded_doc in uploaded_docs)],
+                                 if not any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)],
             'recommendations': self.generate_document_recommendations(mandatory_sufficiency)
         }
     
@@ -376,9 +478,15 @@ class InstitutionalAIAnalyzer:
         historical_trend = inst_data.groupby('year')['performance_score'].mean()
         
         # Performance trends
-        trend_analysis = "Improving" if len(historical_trend) > 1 and (
-            historical_trend.iloc[-1] > historical_trend.iloc[-2]) else "Stable" if len(
-            historical_trend) > 1 and historical_trend.iloc[-1] == historical_trend.iloc[-2] else "Declining"
+        if len(historical_trend) > 1:
+            if historical_trend.iloc[-1] > historical_trend.iloc[-2]:
+                trend_analysis = "Improving"
+            elif historical_trend.iloc[-1] == historical_trend.iloc[-2]:
+                trend_analysis = "Stable"
+            else:
+                trend_analysis = "Declining"
+        else:
+            trend_analysis = "Insufficient Data"
         
         # Comparative analysis
         similar_institutions = self.find_similar_institutions(institution_id)
@@ -421,10 +529,14 @@ class InstitutionalAIAnalyzer:
             (self.historical_data['institution_id'] != institution_id)
         ]
         
-        similar_inst = similar_inst.nlargest(5, 'performance_score')
+        if len(similar_inst) > 0:
+            similar_inst = similar_inst.nlargest(5, 'performance_score')
+            benchmark_data = similar_inst[['institution_name', 'performance_score', 'approval_recommendation']].to_dict('records')
+        else:
+            benchmark_data = []
         
         return {
-            "benchmark_institutions": similar_inst[['institution_name', 'performance_score', 'approval_recommendation']].to_dict('records'),
+            "benchmark_institutions": benchmark_data,
             "performance_percentile": self.calculate_performance_percentile(latest_data['performance_score'], latest_data['institution_type'])
         }
     
@@ -459,6 +571,9 @@ class InstitutionalAIAnalyzer:
         if institution_data['phd_faculty_ratio'] > 0.7:
             strengths.append(f"Highly Qualified Faculty: {institution_data['phd_faculty_ratio']:.1%} PhDs")
         
+        if institution_data['digital_infrastructure_score'] > 8.5:
+            strengths.append("Advanced Digital Infrastructure")
+            
         return strengths
     
     def identify_weaknesses(self, institution_data: pd.Series) -> List[str]:
@@ -477,6 +592,9 @@ class InstitutionalAIAnalyzer:
         if institution_data['digital_infrastructure_score'] < 7:
             weaknesses.append(f"Weak Digital Infrastructure: {institution_data['digital_infrastructure_score']:.1f}/10")
         
+        if institution_data['community_projects'] < 5:
+            weaknesses.append("Limited Community Engagement")
+            
         return weaknesses
     
     def generate_ai_recommendations(self, institution_data: pd.Series) -> List[str]:
@@ -505,6 +623,11 @@ def create_performance_dashboard(analyzer):
     
     df = analyzer.historical_data
     current_year_data = df[df['year'] == 2023]
+    
+    # Ensure we have data
+    if len(current_year_data) == 0:
+        st.warning("No data available for the current year. Please check data generation.")
+        return
     
     # Key Performance Indicators
     st.subheader("🏆 Key Performance Indicators")
@@ -544,9 +667,14 @@ def create_performance_dashboard(analyzer):
             x='performance_score',
             title="Distribution of Institutional Performance Scores",
             nbins=20,
-            color_discrete_sequence=['#1f77b4']
+            color_discrete_sequence=['#1f77b4'],
+            opacity=0.8
         )
-        fig1.update_layout(xaxis_title="Performance Score", yaxis_title="Number of Institutions")
+        fig1.update_layout(
+            xaxis_title="Performance Score", 
+            yaxis_title="Number of Institutions",
+            showlegend=False
+        )
         st.plotly_chart(fig1, use_container_width=True)
     
     with col2:
@@ -557,6 +685,11 @@ def create_performance_dashboard(analyzer):
             y='performance_score',
             title="Performance Score by Institution Type",
             color='institution_type'
+        )
+        fig2.update_layout(
+            xaxis_title="Institution Type",
+            yaxis_title="Performance Score",
+            showlegend=False
         )
         st.plotly_chart(fig2, use_container_width=True)
     
@@ -573,7 +706,11 @@ def create_performance_dashboard(analyzer):
         title="Average Performance Score Trend (2019-2023)",
         markers=True
     )
-    fig3.update_layout(xaxis_title="Year", yaxis_title="Average Performance Score")
+    fig3.update_layout(
+        xaxis_title="Year", 
+        yaxis_title="Average Performance Score",
+        legend_title="Institution Type"
+    )
     st.plotly_chart(fig3, use_container_width=True)
     
     # Risk Analysis
@@ -614,7 +751,50 @@ def create_performance_dashboard(analyzer):
                 'Critical Risk': '#c0392b'
             }
         )
+        fig5.update_layout(
+            xaxis_title="Research Publications",
+            yaxis_title="Placement Rate (%)"
+        )
         st.plotly_chart(fig5, use_container_width=True)
+    
+    # Additional Visualizations
+    st.subheader("🎯 Additional Insights")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # State-wise Performance
+        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False).head(10)
+        fig6 = px.bar(
+            x=state_performance.index,
+            y=state_performance.values,
+            title="Top 10 States by Average Performance Score",
+            color=state_performance.values,
+            color_continuous_scale='Viridis'
+        )
+        fig6.update_layout(
+            xaxis_title="State",
+            yaxis_title="Average Performance Score",
+            showlegend=False
+        )
+        st.plotly_chart(fig6, use_container_width=True)
+    
+    with col2:
+        # NAAC Grade Distribution
+        naac_dist = current_year_data['naac_grade'].value_counts()
+        fig7 = px.bar(
+            x=naac_dist.index,
+            y=naac_dist.values,
+            title="NAAC Grade Distribution",
+            color=naac_dist.index,
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig7.update_layout(
+            xaxis_title="NAAC Grade",
+            yaxis_title="Number of Institutions",
+            showlegend=False
+        )
+        st.plotly_chart(fig7, use_container_width=True)
 
 def create_document_analysis_module(analyzer):
     st.header("📋 AI-Powered Document Sufficiency Analysis")
@@ -625,6 +805,13 @@ def create_document_analysis_module(analyzer):
     
     with col1:
         st.subheader("Document Upload & Analysis")
+        
+        # Institution selection
+        current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
+        selected_institution = st.selectbox(
+            "Select Institution",
+            current_institutions
+        )
         
         approval_type = st.selectbox(
             "Select Approval Type",
@@ -640,45 +827,88 @@ def create_document_analysis_module(analyzer):
         )
         
         if uploaded_files:
-            file_names = [file.name for file in uploaded_files]
-            
-            # Analyze document sufficiency
-            analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
-            
-            # Display results
-            st.subheader("📊 Document Sufficiency Analysis")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.metric(
-                    "Mandatory Documents", 
-                    f"{analysis_result['mandatory_sufficiency']:.1f}%",
-                    delta=f"{analysis_result['mandatory_sufficiency'] - 100:.1f}%" if analysis_result['mandatory_sufficiency'] < 100 else None,
-                    delta_color="inverse"
+            # Document type mapping
+            st.subheader("📝 Document Type Assignment")
+            document_types = []
+            for i, file in enumerate(uploaded_files):
+                doc_type = st.selectbox(
+                    f"Document type for: {file.name}",
+                    ["affidavit_legal_status", "land_documents", "building_plan_approval", 
+                     "financial_solvency_certificate", "faculty_recruitment_plan", 
+                     "academic_curriculum", "annual_reports", "research_publications",
+                     "placement_records", "other"],
+                    key=f"doc_type_{i}"
                 )
+                document_types.append(doc_type)
             
-            with col2:
-                st.metric(
-                    "Overall Sufficiency", 
-                    f"{analysis_result['overall_sufficiency']:.1f}%"
-                )
-            
-            # Missing documents
-            if analysis_result['missing_mandatory']:
-                st.error("**❌ Missing Mandatory Documents:**")
-                for doc in analysis_result['missing_mandatory']:
-                    st.write(f"• {doc.replace('_', ' ').title()}")
-            
-            if analysis_result['missing_supporting']:
-                st.warning("**📝 Missing Supporting Documents:**")
-                for doc in analysis_result['missing_supporting']:
-                    st.write(f"• {doc.replace('_', ' ').title()}")
-            
-            # Recommendations
-            st.info("**💡 AI Recommendations:**")
-            for recommendation in analysis_result['recommendations']:
-                st.write(f"• {recommendation}")
+            if st.button("💾 Save Documents & Analyze"):
+                # Save documents
+                analyzer.save_uploaded_documents(selected_institution, uploaded_files, document_types)
+                st.success("✅ Documents saved successfully!")
+                
+                # Analyze document sufficiency
+                file_names = [file.name for file in uploaded_files]
+                analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
+                
+                # Display results
+                st.subheader("📊 Document Sufficiency Analysis")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.metric(
+                        "Mandatory Documents", 
+                        f"{analysis_result['mandatory_sufficiency']:.1f}%",
+                        delta=f"{analysis_result['mandatory_sufficiency'] - 100:.1f}%" if analysis_result['mandatory_sufficiency'] < 100 else None,
+                        delta_color="inverse"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Overall Sufficiency", 
+                        f"{analysis_result['overall_sufficiency']:.1f}%"
+                    )
+                
+                # Visual representation
+                fig = go.Figure()
+                fig.add_trace(go.Indicator(
+                    mode = "gauge+number+delta",
+                    value = analysis_result['mandatory_sufficiency'],
+                    domain = {'x': [0, 1], 'y': [0, 1]},
+                    title = {'text': "Mandatory Documents Sufficiency"},
+                    gauge = {
+                        'axis': {'range': [None, 100]},
+                        'bar': {'color': "darkblue"},
+                        'steps': [
+                            {'range': [0, 50], 'color': "lightgray"},
+                            {'range': [50, 80], 'color': "yellow"},
+                            {'range': [80, 100], 'color': "lightgreen"}
+                        ],
+                        'threshold': {
+                            'line': {'color': "red", 'width': 4},
+                            'thickness': 0.75,
+                            'value': 90
+                        }
+                    }
+                ))
+                fig.update_layout(height=300)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Missing documents
+                if analysis_result['missing_mandatory']:
+                    st.error("**❌ Missing Mandatory Documents:**")
+                    for doc in analysis_result['missing_mandatory']:
+                        st.write(f"• {doc.replace('_', ' ').title()}")
+                
+                if analysis_result['missing_supporting']:
+                    st.warning("**📝 Missing Supporting Documents:**")
+                    for doc in analysis_result['missing_supporting']:
+                        st.write(f"• {doc.replace('_', ' ').title()}")
+                
+                # Recommendations
+                st.info("**💡 AI Recommendations:**")
+                for recommendation in analysis_result['recommendations']:
+                    st.write(f"• {recommendation}")
     
     with col2:
         st.subheader("Document Requirements Guide")
@@ -694,6 +924,15 @@ def create_document_analysis_module(analyzer):
                 st.write("**Supporting Documents:**")
                 for doc in docs['supporting']:
                     st.write(f"• {doc.replace('_', ' ').title()}")
+        
+        # Show uploaded documents for selected institution
+        if selected_institution:
+            st.subheader("📁 Previously Uploaded Documents")
+            existing_docs = analyzer.get_institution_documents(selected_institution)
+            if len(existing_docs) > 0:
+                st.dataframe(existing_docs[['document_name', 'document_type', 'upload_date', 'status']])
+            else:
+                st.info("No documents uploaded yet for this institution.")
 
 def create_ai_analysis_reports(analyzer):
     st.header("🤖 Comprehensive AI Analysis Reports")
@@ -729,21 +968,32 @@ def create_ai_analysis_reports(analyzer):
                 with col4:
                     st.metric("Performance Score", f"{report['performance_analysis']['current_score']:.2f}/10")
                 
-                # Approval Recommendation
-                rec_color = {
-                    "Full Approval - 5 Years": "green",
-                    "Provisional Approval - 3 Years": "blue", 
-                    "Conditional Approval - 1 Year": "orange",
-                    "Approval with Strict Monitoring - 1 Year": "red",
-                    "Rejection - Significant Improvements Required": "darkred"
-                }.get(report['performance_analysis']['approval_recommendation'], "gray")
+                # Approval Recommendation with colored indicator
+                recommendation = report['performance_analysis']['approval_recommendation']
+                if "Full Approval" in recommendation:
+                    st.success(f"**✅ {recommendation}**")
+                elif "Provisional" in recommendation:
+                    st.warning(f"**🟡 {recommendation}**")
+                elif "Conditional" in recommendation or "Monitoring" in recommendation:
+                    st.error(f"**🟠 {recommendation}**")
+                else:
+                    st.error(f"**🔴 {recommendation}**")
                 
+                # Risk Level
+                risk_level = report['performance_analysis']['risk_level']
+                if risk_level == "Low Risk":
+                    st.success(f"**Risk Level: {risk_level}**")
+                elif risk_level == "Medium Risk":
+                    st.warning(f"**Risk Level: {risk_level}**")
+                else:
+                    st.error(f"**Risk Level: {risk_level}**")
+                
+                # Performance Trend
                 st.metric(
-                    "AI Recommendation", 
-                    report['performance_analysis']['approval_recommendation'],
+                    "Performance Trend", 
+                    report['performance_analysis']['trend_analysis'],
                     delta=report['performance_analysis']['trend_analysis'],
-                    delta_color="off" if report['performance_analysis']['trend_analysis'] == "Stable" else 
-                               "normal" if report['performance_analysis']['trend_analysis'] == "Improving" else "inverse"
+                    delta_color="normal" if report['performance_analysis']['trend_analysis'] == "Improving" else "off" if report['performance_analysis']['trend_analysis'] == "Stable" else "inverse"
                 )
                 
                 # Strengths and Weaknesses
@@ -754,26 +1004,45 @@ def create_ai_analysis_reports(analyzer):
                         st.success("**✅ Institutional Strengths**")
                         for strength in report['strengths']:
                             st.write(f"• {strength}")
+                    else:
+                        st.info("No significant strengths identified")
                 
                 with col2:
                     if report['weaknesses']:
                         st.error("**⚠️ Areas for Improvement**")
                         for weakness in report['weaknesses']:
                             st.write(f"• {weakness}")
+                    else:
+                        st.success("No major weaknesses identified")
                 
                 # AI Recommendations
                 if report['ai_recommendations']:
                     st.warning("**🎯 AI Improvement Recommendations**")
                     for recommendation in report['ai_recommendations']:
                         st.write(f"• {recommendation}")
+                else:
+                    st.success("Institution is performing well across all parameters")
                 
                 # Comparative Analysis
                 st.info("**📊 Comparative Analysis**")
                 if report['comparative_analysis']:
-                    st.write(f"Performance Percentile: {report['comparative_analysis']['performance_percentile']:.1f}%")
-                    st.write("**Benchmark Institutions:**")
-                    for bench in report['comparative_analysis']['benchmark_institutions']:
-                        st.write(f"• {bench['institution_name']}: {bench['performance_score']:.2f} - {bench['approval_recommendation']}")
+                    st.write(f"**Performance Percentile:** {report['comparative_analysis']['performance_percentile']:.1f}%")
+                    if report['comparative_analysis']['benchmark_institutions']:
+                        st.write("**Benchmark Institutions:**")
+                        for bench in report['comparative_analysis']['benchmark_institutions']:
+                            st.write(f"• **{bench['institution_name']}**: {bench['performance_score']:.2f} - {bench['approval_recommendation']}")
+                    else:
+                        st.info("No similar institutions found for comparison")
+                
+                # Historical Performance Chart
+                if len(report['performance_analysis']['historical_trend']) > 1:
+                    st.subheader("📈 Historical Performance Trend")
+                    trend_df = pd.DataFrame(list(report['performance_analysis']['historical_trend'].items()), 
+                                          columns=['Year', 'Performance Score'])
+                    fig = px.line(trend_df, x='Year', y='Performance Score', 
+                                title=f"Performance Trend for {report['institution_info']['name']}",
+                                markers=True)
+                    st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         st.subheader("Quick Institutional Insights")
@@ -785,7 +1054,10 @@ def create_ai_analysis_reports(analyzer):
         
         st.write("**🏆 Top Performing Institutions**")
         for _, inst in top_performers.iterrows():
-            st.write(f"• {inst['institution_name']} ({inst['performance_score']:.2f})")
+            st.write(f"• **{inst['institution_name']}** ({inst['performance_score']:.2f})")
+            st.write(f"  _{inst['approval_recommendation']}_")
+        
+        st.markdown("---")
         
         # High risk institutions
         high_risk = df[
@@ -796,7 +1068,105 @@ def create_ai_analysis_reports(analyzer):
         if not high_risk.empty:
             st.write("**🚨 High Risk Institutions**")
             for _, inst in high_risk.iterrows():
-                st.write(f"• {inst['institution_name']} - {inst['risk_level']}")
+                st.write(f"• **{inst['institution_name']}** - {inst['risk_level']}")
+        
+        # Quick stats
+        st.markdown("---")
+        st.write("**📊 Quick Statistics**")
+        total_inst = len(df[df['year'] == 2023])
+        approved = len(df[(df['year'] == 2023) & (df['performance_score'] >= 7.0)])
+        st.write(f"• Total Institutions: {total_inst}")
+        st.write(f"• High Performing: {approved}")
+        st.write(f"• Approval Rate: {(approved/total_inst*100):.1f}%")
+
+def create_data_management_module(analyzer):
+    st.header("💾 Data Management & Upload")
+    
+    tab1, tab2, tab3 = st.tabs(["📤 Upload New Data", "🔍 View Current Data", "⚙️ Database Management"])
+    
+    with tab1:
+        st.subheader("Upload Institutional Data")
+        
+        uploaded_file = st.file_uploader("Upload CSV file with institutional data", type=['csv'])
+        
+        if uploaded_file is not None:
+            try:
+                new_data = pd.read_csv(uploaded_file)
+                st.success(f"✅ Successfully loaded {len(new_data)} records")
+                
+                # Show preview
+                st.subheader("Data Preview")
+                st.dataframe(new_data.head())
+                
+                # Data validation
+                required_columns = ['institution_id', 'institution_name', 'year', 'institution_type']
+                missing_columns = [col for col in required_columns if col not in new_data.columns]
+                
+                if missing_columns:
+                    st.error(f"❌ Missing required columns: {missing_columns}")
+                else:
+                    st.success("✅ All required columns present")
+                    
+                    if st.button("💾 Save to Database"):
+                        try:
+                            new_data.to_sql('institutions', analyzer.conn, if_exists='append', index=False)
+                            st.success("✅ Data successfully saved to database!")
+                            # Refresh the data
+                            analyzer.historical_data = analyzer.load_or_generate_data()
+                        except Exception as e:
+                            st.error(f"❌ Error saving to database: {str(e)}")
+                            
+            except Exception as e:
+                st.error(f"❌ Error reading file: {str(e)}")
+    
+    with tab2:
+        st.subheader("Current Database Contents")
+        
+        # Show database statistics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            total_records = len(analyzer.historical_data)
+            st.metric("Total Records", total_records)
+        with col2:
+            unique_institutions = analyzer.historical_data['institution_id'].nunique()
+            st.metric("Unique Institutions", unique_institutions)
+        with col3:
+            years_covered = analyzer.historical_data['year'].nunique()
+            st.metric("Years Covered", years_covered)
+        
+        # Data preview
+        st.subheader("Data Preview")
+        st.dataframe(analyzer.historical_data.head(10))
+        
+        # Export data
+        if st.button("📥 Export Current Data as CSV"):
+            csv = analyzer.historical_data.to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name="institutional_data_export.csv",
+                mime="text/csv"
+            )
+    
+    with tab3:
+        st.subheader("Database Management")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 Regenerate Sample Data", help="Replace current data with new sample data"):
+                new_data = analyzer.generate_comprehensive_historical_data()
+                new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+                analyzer.historical_data = new_data
+                st.success("✅ Sample data regenerated successfully!")
+        
+        with col2:
+            if st.button("🗑️ Clear All Data", help="Remove all data from the database"):
+                cursor = analyzer.conn.cursor()
+                cursor.execute('DELETE FROM institutions')
+                analyzer.conn.commit()
+                analyzer.historical_data = pd.DataFrame()
+                st.success("✅ All data cleared successfully!")
 
 def create_approval_workflow(analyzer):
     st.header("🔄 AI-Enhanced Approval Workflow")
@@ -936,12 +1306,18 @@ def main():
         
         with col3:
             current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
-            avg_performance = current_year_data['performance_score'].mean()
-            st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
+            if len(current_year_data) > 0:
+                avg_performance = current_year_data['performance_score'].mean()
+                st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
+            else:
+                st.metric("Avg Performance Score", "N/A")
         
         with col4:
-            approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
-            st.metric("Approval Ready", approval_ready)
+            if len(current_year_data) > 0:
+                approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
+                st.metric("Approval Ready", approval_ready)
+            else:
+                st.metric("Approval Ready", "N/A")
             
     except Exception as e:
         st.error(f"❌ System initialization error: {str(e)}")
@@ -957,6 +1333,7 @@ def main():
             "📊 Performance Dashboard",
             "📋 Document Analysis", 
             "🤖 AI Reports",
+            "💾 Data Management",
             "🔄 Approval Workflow",
             "⚙️ System Settings"
         ]
@@ -980,6 +1357,9 @@ def main():
     elif app_mode == "🤖 AI Reports":
         create_ai_analysis_reports(analyzer)
     
+    elif app_mode == "💾 Data Management":
+        create_data_management_module(analyzer)
+    
     elif app_mode == "🔄 Approval Workflow":
         create_approval_workflow(analyzer)
     
@@ -990,21 +1370,30 @@ def main():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Performance Metrics")
+            st.subheader("Performance Metrics Configuration")
             st.json(analyzer.performance_metrics)
         
         with col2:
             st.subheader("Document Requirements")
             st.json(analyzer.document_requirements)
+        
+        st.subheader("System Information")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Database Records", len(analyzer.historical_data))
+        with col2:
+            st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
+        with col3:
+            st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
     
     # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #6c757d;'>
     <p><strong>UGC/AICTE Institutional Analytics Platform</strong> | AI-Powered Decision Support System</p>
-    <p>Version 1.0 | For authorized use only</p>
+    <p>Version 2.0 | For authorized use only | Data last updated: {}</p>
     </div>
-    """, unsafe_allow_html=True)
+    """.format(datetime.now().strftime("%Y-%m-%d %H:%M")), unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main() 
+    main()
