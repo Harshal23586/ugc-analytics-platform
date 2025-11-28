@@ -34,8 +34,12 @@ from typing import List
 
 class SimpleDocument:
     def __init__(self, page_content: str, metadata: dict = None):
-        self.page_content = page_content
-        self.metadata = metadata or {}
+        self.init_database()
+        self.historical_data = self.load_or_generate_data()
+        self.performance_metrics = self.define_performance_metrics()
+        self.document_requirements = self.define_document_requirements()
+        self.rag_extractor = RAGDataExtractor()
+        self.create_dummy_institution_users()
 
 class SimpleTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=200):
@@ -331,6 +335,8 @@ class InstitutionalAIAnalyzer:
         self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
+
+    
         
         # Create institutions table
         cursor.execute('''
@@ -436,6 +442,91 @@ class InstitutionalAIAnalyzer:
         ''')
         
         self.conn.commit()
+
+    def create_dummy_institution_users(self):
+        """Create dummy institution users for testing"""
+        dummy_users = [
+            {
+                'institution_id': 'INST_0001',
+                'username': 'inst001_admin',
+                'password': 'password123',
+                'contact_person': 'Dr. Rajesh Kumar',
+                'email': 'rajesh.kumar@university001.edu.in',
+                'phone': '+91-9876543210'
+            },
+            {
+                'institution_id': 'INST_0050',
+                'username': 'inst050_registrar',
+                'password': 'testpass456',
+                'contact_person': 'Ms. Priya Sharma',
+                'email': 'priya.sharma@college050.edu.in',
+                'phone': '+91-8765432109'
+            },
+            {
+                'institution_id': 'INST_0100',
+                'username': 'inst100_director',
+                'password': 'demo789',
+                'contact_person': 'Prof. Amit Patel',
+                'email': 'amit.patel@university100.edu.in',
+                'phone': '+91-7654321098'
+            },
+            {
+                'institution_id': 'INST_0150',
+                'username': 'inst150_officer',
+                'password': 'admin2024',
+                'contact_person': 'Dr. Sunita Reddy',
+                'email': 'sunita.reddy@college150.edu.in',
+                'phone': '+91-6543210987'
+            },
+            {
+                'institution_id': 'INST_0200',
+                'username': 'inst200_manager',
+                'password': 'securepass',
+                'contact_person': 'Mr. Vikram Singh',
+                'email': 'vikram.singh@university200.edu.in',
+                'phone': '+91-5432109876'
+            }
+        ]
+    
+        for user_data in dummy_users:
+            try:
+                # Check if user already exists
+                cursor = self.conn.cursor()
+                cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
+                existing_user = cursor.fetchone()
+            
+                if not existing_user:
+                    self.create_institution_user(
+                        user_data['institution_id'],
+                        user_data['username'],
+                        user_data['password'],
+                        user_data['contact_person'],
+                        user_data['email'],
+                        user_data['phone']
+                    )
+                    print(f"Created user: {user_data['username']}")
+            except Exception as e:
+                print(f"Error creating user {user_data['username']}: {e}")
+
+    def create_institution_user(self, institution_id: str, username: str, password: str, 
+                          contact_person: str, email: str, phone: str):
+        """Create new institution user account"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO institution_users 
+                (institution_id, username, password_hash, contact_person, email, phone)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (institution_id, username, self.hash_password(password), 
+                  contact_person, email, phone))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def hash_password(self, password: str) -> str:
+        """Simple password hashing (use proper hashing in production)"""
+        return hashlib.sha256(password.encode()).hexdigest()
 
     def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
         """Analyze uploaded documents using RAG and extract structured data"""
