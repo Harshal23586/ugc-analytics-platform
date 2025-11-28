@@ -128,14 +128,14 @@ class RAGDataExtractor:
         self.vector_store = None
         self.documents = []
 
-    def build_vector_store(self, documents: List[SimpleDocument]):
+    def build_vector_store(self, documents: List[SimpleDocument]):  # Change Document to SimpleDocument
         """Build simple vector store from documents"""
         texts = [doc.page_content for doc in documents]
         if not texts:
             return None
-            
-        embeddings = self.embedding_model.encode(texts)
         
+        embeddings = self.embedding_model.encode(texts)
+    
         # Create text-embedding pairs for our simple vector store
         text_embeddings = list(zip(texts, embeddings))
         self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
@@ -243,7 +243,7 @@ class RAGDataExtractor:
                 else:
                     data['governance_metrics'][key] = match.group(1)
     
-    def build_vector_store(self, documents: List[Document]):
+    def build_vector_store(self, documents: List[SimpleDocument]):
         """Build FAISS vector store from documents"""
         texts = [doc.page_content for doc in documents]
         if not texts:
@@ -289,7 +289,7 @@ class RAGDataExtractor:
                 all_text += cleaned_text + "\n\n"
             
                 # Create document for vector store - USE SimpleDocument instead of Document
-                doc = SimpleDocument(  # Change this line
+                doc = SimpleDocument(
                     page_content=cleaned_text,
                     metadata={"source": file.name, "type": "institutional_data"}
                 )
