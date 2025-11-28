@@ -32,6 +32,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import re
 from typing import List
 
+class SimpleDocument:
+    def __init__(self, page_content: str, metadata: dict = None):
+        self.page_content = page_content
+        self.metadata = metadata or {}
+
 class SimpleTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=200):
         self.chunk_size = chunk_size
@@ -69,11 +74,6 @@ class SimpleTextSplitter:
             chunks.append(current_chunk.strip())
         
         return chunks
-
-class SimpleDocument:
-    def __init__(self, page_content: str, metadata: dict = None):
-        self.page_content = page_content
-        self.metadata = metadata or {}
 
 class SimpleVectorStore:
     def __init__(self, embedding_model):
@@ -117,11 +117,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-class SimpleDocument:
-    def __init__(self, page_content: str, metadata: dict = None):
-        self.page_content = page_content
-        self.metadata = metadata or {}
 
 class RAGDataExtractor:
     def __init__(self):
