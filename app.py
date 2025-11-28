@@ -1284,7 +1284,7 @@ def create_institution_login(analyzer):
                 st.session_state.institution_user = user
                 st.session_state.user_role = "Institution"
                 st.success(f"Welcome, {user['contact_person']} from {user['institution_name']}!")
-                st.rerun()
+                st.rerun()  # Use rerun instead of stop
             else:
                 st.error("Invalid username or password")
     
@@ -2435,6 +2435,14 @@ def create_rag_data_management(analyzer):
             st.success("RAG system reset successfully!")
 
 def main():
+    if 'institution_user' not in st.session_state:
+        st.session_state.institution_user = None
+    if 'user_role' not in st.session_state:
+        st.session_state.user_role = None
+    if 'rag_analysis' not in st.session_state:
+        st.session_state.rag_analysis = None
+    if 'selected_institution' not in st.session_state:
+        st.session_state.selected_institution = None
     st.markdown("""
     <style>
     .main-header {
@@ -2544,91 +2552,93 @@ def main():
         st.stop()
     
     # Navigation
-    st.sidebar.title("🧭 Navigation Panel")
-    st.sidebar.markdown("### AI Modules")
-
-    app_mode = st.sidebar.selectbox(
-        "Select Analysis Module",
-        [
-            "📊 Performance Dashboard",
-            "📋 Document Analysis", 
-            "🤖 AI Reports",
-            "🔍 RAG Data Management",  # NEW
-            "💾 Data Management",
-            "🔄 Approval Workflow",
-            "⚙️ System Settings"
-        ]
-    )
+        # Navigation - SINGLE sidebar section for all roles
+        st.sidebar.title("🧭 Navigation Panel")
     
-    # Authentication Section
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔐 Authentication")
+        # Authentication Section
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🔐 Authentication")
     
-    user_role = st.sidebar.selectbox(
-        "Select Your Role",
-        ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
-    )
+        # Role selection - only show if not logged in as institution
+        if st.session_state.institution_user is None:
+            user_role = st.sidebar.selectbox(
+                "Select Your Role",
+                ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+            )
+        else:
+            user_role = "Institution"  # Already logged in as institution
     
-    if user_role == "Institution":
-        create_institution_login(analyzer)
-        return
+        # Handle Institution role
+        if user_role == "Institution":
+            if st.session_state.institution_user is None:
+                create_institution_login(analyzer)
+                return
+            else:
+                # Institution is logged in, show their dashboard
+                create_institution_dashboard(analyzer, st.session_state.institution_user)
+                if st.sidebar.button("🚪 Logout"):
+                    del st.session_state.institution_user
+                    st.session_state.user_role = None
+                    st.rerun()
+                return
     
-    # For other roles, show the existing modules
-    st.sidebar.markdown("### AI Modules")
+        # For other roles, show the AI modules - ONLY ONCE
+        st.sidebar.markdown("### AI Modules")
     
-    app_mode = st.sidebar.selectbox(
-        "Select Analysis Module",
-        [
-            "📊 Performance Dashboard",
-            "📋 Document Analysis", 
-            "🤖 AI Reports",
-            "💾 Data Management",
-            "🔄 Approval Workflow",
-            "⚙️ System Settings"
-        ]
-    )
+        app_mode = st.sidebar.selectbox(
+            "Select Analysis Module",
+            [
+                "📊 Performance Dashboard",
+                "📋 Document Analysis", 
+                "🤖 AI Reports",
+                "🔍 RAG Data Management",
+                "💾 Data Management",
+                "🔄 Approval Workflow",
+                "⚙️ System Settings"
+            ]
+        )
     
-    # Route to selected module
-    if app_mode == "📊 Performance Dashboard":
-        create_performance_dashboard(analyzer)
+        # Route to selected module
+        if app_mode == "📊 Performance Dashboard":
+            create_performance_dashboard(analyzer)
     
-    elif app_mode == "📋 Document Analysis":
-        create_document_analysis_module(analyzer)
+        elif app_mode == "📋 Document Analysis":
+            create_document_analysis_module(analyzer)
     
-    elif app_mode == "🤖 AI Reports":
-        create_ai_analysis_reports(analyzer)
+        elif app_mode == "🤖 AI Reports":
+            create_ai_analysis_reports(analyzer)
     
-    elif app_mode == "🔍 RAG Data Management":  # NEW
-        create_rag_data_management(analyzer)
+        elif app_mode == "🔍 RAG Data Management":
+            create_rag_data_management(analyzer)
     
-    elif app_mode == "💾 Data Management":
-        create_data_management_module(analyzer)
+        elif app_mode == "💾 Data Management":
+            create_data_management_module(analyzer)
     
-    elif app_mode == "🔄 Approval Workflow":
-        create_approval_workflow(analyzer)
+        elif app_mode == "🔄 Approval Workflow":
+            create_approval_workflow(analyzer)
     
-    elif app_mode == "⚙️ System Settings":
-        st.header("⚙️ System Settings & Configuration")
-        st.info("System administration and configuration panel")
+        elif app_mode == "⚙️ System Settings":
+            st.header("⚙️ System Settings & Configuration")
+            st.info("System administration and configuration panel")
         
-        col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
         
-        with col1:
-            st.subheader("Performance Metrics Configuration")
-            st.json(analyzer.performance_metrics)
+            with col1:
+                st.subheader("Performance Metrics Configuration")
+                st.json(analyzer.performance_metrics)
         
-        with col2:
-            st.subheader("Document Requirements")
-            st.json(analyzer.document_requirements)
+            with col2:
+                st.subheader("Document Requirements")
+                st.json(analyzer.document_requirements)
         
-        st.subheader("System Information")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Database Records", len(analyzer.historical_data))
-        with col2:
-            st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
-        with col3:
-            st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
+            st.subheader("System Information")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Database Records", len(analyzer.historical_data))
+            with col2:
+                st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
+            with col3:
+                st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
     
     # Footer
     st.markdown("---")
