@@ -27,11 +27,6 @@ import docx
 import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-# Remove these imports:
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain.embeddings import HuggingFaceEmbeddings
-# from langchain.vectorstores import FAISS
-# from langchain.schema import Document
 
 # Add these instead:
 import re
@@ -122,6 +117,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+class SimpleDocument:
+    def __init__(self, page_content: str, metadata: dict = None):
+        self.page_content = page_content
+        self.metadata = metadata or {}
 
 class RAGDataExtractor:
     def __init__(self):
@@ -271,57 +271,57 @@ class RAGDataExtractor:
         return results
     
     def extract_comprehensive_data(self, uploaded_files: List) -> Dict[str, Any]:
-        """Extract comprehensive data from all uploaded files"""
-        all_text = ""
-        all_structured_data = {
-            'academic_metrics': {},
-            'research_metrics': {},
-            'infrastructure_metrics': {},
-            'governance_metrics': {},
-            'student_metrics': {},
-            'financial_metrics': {},
-            'raw_text': "",
-            'file_names': []
-        }
-        
-        documents = []
-        
-        for file in uploaded_files:
-            try:
-                # Extract text
-                text = self.extract_text_from_file(file)
-                cleaned_text = self.preprocess_text(text)
-                all_text += cleaned_text + "\n\n"
-                
-                # Create document for vector store
-                doc = Document(
-                    page_content=cleaned_text,
-                    metadata={"source": file.name, "type": "institutional_data"}
-                )
-                documents.append(doc)
-                
-                # Extract structured data
-                file_data = self.extract_structured_data(cleaned_text)
-                
-                # Merge data from all files
-                for category in file_data:
-                    if category in all_structured_data:
-                        all_structured_data[category].update(file_data[category])
-                
-                all_structured_data['file_names'].append(file.name)
-                
-            except Exception as e:
-                st.error(f"Error processing {file.name}: {str(e)}")
-                continue
-        
-        # Build vector store for semantic search
-        if documents:
-            self.build_vector_store(documents)
-        
-        all_structured_data['raw_text'] = all_text
-        
-        return all_structured_data
-
+    """Extract comprehensive data from all uploaded files"""
+    all_text = ""
+    all_structured_data = {
+        'academic_metrics': {},
+        'research_metrics': {},
+        'infrastructure_metrics': {},
+        'governance_metrics': {},
+        'student_metrics': {},
+        'financial_metrics': {},
+        'raw_text': "",
+        'file_names': []
+    }
+    
+    documents = []
+    
+    for file in uploaded_files:
+        try:
+            # Extract text
+            text = self.extract_text_from_file(file)
+            cleaned_text = self.preprocess_text(text)
+            all_text += cleaned_text + "\n\n"
+            
+            # Create document for vector store - USE SimpleDocument instead of Document
+            doc = SimpleDocument(  # Change this line
+                page_content=cleaned_text,
+                metadata={"source": file.name, "type": "institutional_data"}
+            )
+            documents.append(doc)
+            
+            # Extract structured data
+            file_data = self.extract_structured_data(cleaned_text)
+            
+            # Merge data from all files
+            for category in file_data:
+                if category in all_structured_data:
+                    all_structured_data[category].update(file_data[category])
+            
+            all_structured_data['file_names'].append(file.name)
+            
+        except Exception as e:
+            st.error(f"Error processing {file.name}: {str(e)}")
+            continue
+    
+    # Build vector store for semantic search
+    if documents:
+        self.build_vector_store(documents)
+    
+    all_structured_data['raw_text'] = all_text
+    
+    return all_structured_data
+    
 class InstitutionalAIAnalyzer:
     def __init__(self):
         self.init_database()
