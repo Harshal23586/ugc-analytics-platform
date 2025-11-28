@@ -315,32 +315,32 @@ class InstitutionalAIAnalyzer:
         }
 
     def authenticate_institution_user(self, username: str, password: str) -> Dict:
-    """Authenticate institution user"""
-    cursor = self.conn.cursor()
-    cursor.execute('''
-        SELECT iu.*, i.institution_name 
-        FROM institution_users iu 
-        JOIN institutions i ON iu.institution_id = i.institution_id 
-        WHERE iu.username = ? AND iu.is_active = 1
-    ''', (username,))
+        """Authenticate institution user"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT iu.*, i.institution_name 
+            FROM institution_users iu 
+            JOIN institutions i ON iu.institution_id = i.institution_id 
+            WHERE iu.username = ? AND iu.is_active = 1
+        ''', (username,))
     
-    user = cursor.fetchone()
-    if user:
-        # Convert tuple to dictionary by getting column names
-        columns = [description[0] for description in cursor.description]
-        user_dict = dict(zip(columns, user))
+        user = cursor.fetchone()
+        if user:
+            # Convert tuple to dictionary by getting column names
+            columns = [description[0] for description in cursor.description]
+            user_dict = dict(zip(columns, user))
         
-        # In a real application, use proper password hashing
-        if user_dict['password_hash'] == self.hash_password(password):
-            return {
-                'institution_id': user_dict['institution_id'],
-                'institution_name': user_dict['institution_name'],
-                'username': user_dict['username'],
-                'role': user_dict['role'],
-                'contact_person': user_dict['contact_person'],
-                'email': user_dict['email']
-            }
-    return None
+            # In a real application, use proper password hashing
+            if user_dict['password_hash'] == self.hash_password(password):
+                return {
+                    'institution_id': user_dict['institution_id'],
+                    'institution_name': user_dict['institution_name'],
+                    'username': user_dict['username'],
+                    'role': user_dict['role'],
+                    'contact_person': user_dict['contact_person'],
+                    'email': user_dict['email']
+                }
+        return None
     
     def hash_password(self, password: str) -> str:
         """Simple password hashing (use proper hashing in production)"""
