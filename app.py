@@ -33,59 +33,66 @@ class InstitutionalAIAnalyzer:
         self.performance_metrics = self.define_performance_metrics()
         self.document_requirements = self.define_document_requirements()
         self.create_dummy_institution_users()
-        
-    def init_database(self):
-        """Initialize SQLite database for storing institutional data"""
-        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
-        cursor = self.conn.cursor()
 
-    def create_dummy_institution_users(self):
-        """Create dummy institution users for testing"""
-        dummy_users = [
-            {
-                'institution_id': 'INST_0001',
-                'username': 'inst001_admin',
-                'password': 'password123',
-                'contact_person': 'Dr. Rajesh Kumar',
-                'email': 'rajesh.kumar@university001.edu.in',
-                'phone': '+91-9876543210'
-            },
-            {
-                'institution_id': 'INST_0050',
-                'username': 'inst050_registrar',
-                'password': 'testpass456',
-                'contact_person': 'Ms. Priya Sharma',
-                'email': 'priya.sharma@college050.edu.in',
-                'phone': '+91-8765432109'
-            },
-            {
-                'institution_id': 'INST_0100',
-                'username': 'inst100_director',
-                'password': 'demo789',
-                'contact_person': 'Prof. Amit Patel',
-                'email': 'amit.patel@university100.edu.in',
-                'phone': '+91-7654321098'
-            },
-            {
-                'institution_id': 'INST_0150',
-                'username': 'inst150_officer',
-                'password': 'admin2024',
-                'contact_person': 'Dr. Sunita Reddy',
-                'email': 'sunita.reddy@college150.edu.in',
-                'phone': '+91-6543210987'
-            },
-            {
-                'institution_id': 'INST_0200',
-                'username': 'inst200_manager',
-                'password': 'securepass',
-                'contact_person': 'Mr. Vikram Singh',
-                'email': 'vikram.singh@university200.edu.in',
-                'phone': '+91-5432109876'
-            }
-        ]
+    def init_database(self):
+    """Initialize SQLite database for storing institutional data"""
+    self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
+    self.conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
+    cursor = self.conn.cursor()
     
-        for user_data in dummy_users:
-            try:
+    def create_dummy_institution_users(self):
+    """Create dummy institution users for testing"""
+    dummy_users = [
+        {
+            'institution_id': 'INST_0001',
+            'username': 'inst001_admin',
+            'password': 'password123',
+            'contact_person': 'Dr. Rajesh Kumar',
+            'email': 'rajesh.kumar@university001.edu.in',
+            'phone': '+91-9876543210'
+        },
+        {
+            'institution_id': 'INST_0050',
+            'username': 'inst050_registrar',
+            'password': 'testpass456',
+            'contact_person': 'Ms. Priya Sharma',
+            'email': 'priya.sharma@college050.edu.in',
+            'phone': '+91-8765432109'
+        },
+        {
+            'institution_id': 'INST_0100',
+            'username': 'inst100_director',
+            'password': 'demo789',
+            'contact_person': 'Prof. Amit Patel',
+            'email': 'amit.patel@university100.edu.in',
+            'phone': '+91-7654321098'
+        },
+        {
+            'institution_id': 'INST_0150',
+            'username': 'inst150_officer',
+            'password': 'admin2024',
+            'contact_person': 'Dr. Sunita Reddy',
+            'email': 'sunita.reddy@college150.edu.in',
+            'phone': '+91-6543210987'
+        },
+        {
+            'institution_id': 'INST_0200',
+            'username': 'inst200_manager',
+            'password': 'securepass',
+            'contact_person': 'Mr. Vikram Singh',
+            'email': 'vikram.singh@university200.edu.in',
+            'phone': '+91-5432109876'
+        }
+    ]
+    
+    for user_data in dummy_users:
+        try:
+            # Check if user already exists
+            cursor = self.conn.cursor()
+            cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
+            existing_user = cursor.fetchone()
+            
+            if not existing_user:
                 self.create_institution_user(
                     user_data['institution_id'],
                     user_data['username'],
@@ -94,10 +101,10 @@ class InstitutionalAIAnalyzer:
                     user_data['email'],
                     user_data['phone']
                 )
-            except:
-                # User already exists, skip
-                pass        
-    
+                print(f"Created user: {user_data['username']}")
+        except Exception as e:
+            print(f"Error creating user {user_data['username']}: {e}")
+        
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
         self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
@@ -308,29 +315,33 @@ class InstitutionalAIAnalyzer:
         }
 
     def authenticate_institution_user(self, username: str, password: str) -> Dict:
-        """Authenticate institution user"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT iu.*, i.institution_name 
-            FROM institution_users iu 
-            JOIN institutions i ON iu.institution_id = i.institution_id 
-            WHERE iu.username = ? AND iu.is_active = 1
-        ''', (username,))
+    """Authenticate institution user"""
+    cursor = self.conn.cursor()
+    cursor.execute('''
+        SELECT iu.*, i.institution_name 
+        FROM institution_users iu 
+        JOIN institutions i ON iu.institution_id = i.institution_id 
+        WHERE iu.username = ? AND iu.is_active = 1
+    ''', (username,))
+    
+    user = cursor.fetchone()
+    if user:
+        # Convert tuple to dictionary by getting column names
+        columns = [description[0] for description in cursor.description]
+        user_dict = dict(zip(columns, user))
         
-        user = cursor.fetchone()
-        if user:
-            # In a real application, use proper password hashing
-            if user['password_hash'] == self.hash_password(password):
-                return {
-                    'institution_id': user['institution_id'],
-                    'institution_name': user['institution_name'],
-                    'username': user['username'],
-                    'role': user['role'],
-                    'contact_person': user['contact_person'],
-                    'email': user['email']
-                }
-        return None
-
+        # In a real application, use proper password hashing
+        if user_dict['password_hash'] == self.hash_password(password):
+            return {
+                'institution_id': user_dict['institution_id'],
+                'institution_name': user_dict['institution_name'],
+                'username': user_dict['username'],
+                'role': user_dict['role'],
+                'contact_person': user_dict['contact_person'],
+                'email': user_dict['email']
+            }
+    return None
+    
     def hash_password(self, password: str) -> str:
         """Simple password hashing (use proper hashing in production)"""
         return hashlib.sha256(password.encode()).hexdigest()
