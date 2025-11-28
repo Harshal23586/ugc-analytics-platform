@@ -40,64 +40,63 @@ class InstitutionalAIAnalyzer:
         cursor = self.conn.cursor()
 
     def create_dummy_institution_users(self):
-    """Create dummy institution users for testing"""
-    dummy_users = [
-        {
-            'institution_id': 'INST_0001',
-            'username': 'inst001_admin',
-            'password': 'password123',
-            'contact_person': 'Dr. Rajesh Kumar',
-            'email': 'rajesh.kumar@university001.edu.in',
-            'phone': '+91-9876543210'
-        },
-        {
-            'institution_id': 'INST_0050',
-            'username': 'inst050_registrar',
-            'password': 'testpass456',
-            'contact_person': 'Ms. Priya Sharma',
-            'email': 'priya.sharma@college050.edu.in',
-            'phone': '+91-8765432109'
-        },
-        {
-            'institution_id': 'INST_0100',
-            'username': 'inst100_director',
-            'password': 'demo789',
-            'contact_person': 'Prof. Amit Patel',
-            'email': 'amit.patel@university100.edu.in',
-            'phone': '+91-7654321098'
-        },
-        {
-            'institution_id': 'INST_0150',
-            'username': 'inst150_officer',
-            'password': 'admin2024',
-            'contact_person': 'Dr. Sunita Reddy',
-            'email': 'sunita.reddy@college150.edu.in',
-            'phone': '+91-6543210987'
-        },
-        {
-            'institution_id': 'INST_0200',
-            'username': 'inst200_manager',
-            'password': 'securepass',
-            'contact_person': 'Mr. Vikram Singh',
-            'email': 'vikram.singh@university200.edu.in',
-            'phone': '+91-5432109876'
-        }
-    ]
+        """Create dummy institution users for testing"""
+        dummy_users = [
+            {
+                'institution_id': 'INST_0001',
+                'username': 'inst001_admin',
+                'password': 'password123',
+                'contact_person': 'Dr. Rajesh Kumar',
+                'email': 'rajesh.kumar@university001.edu.in',
+                'phone': '+91-9876543210'
+            },
+            {
+                'institution_id': 'INST_0050',
+                'username': 'inst050_registrar',
+                'password': 'testpass456',
+                'contact_person': 'Ms. Priya Sharma',
+                'email': 'priya.sharma@college050.edu.in',
+                'phone': '+91-8765432109'
+            },
+            {
+                'institution_id': 'INST_0100',
+                'username': 'inst100_director',
+                'password': 'demo789',
+                'contact_person': 'Prof. Amit Patel',
+                'email': 'amit.patel@university100.edu.in',
+                'phone': '+91-7654321098'
+            },
+            {
+                'institution_id': 'INST_0150',
+                'username': 'inst150_officer',
+                'password': 'admin2024',
+                'contact_person': 'Dr. Sunita Reddy',
+                'email': 'sunita.reddy@college150.edu.in',
+                'phone': '+91-6543210987'
+            },
+            {
+                'institution_id': 'INST_0200',
+                'username': 'inst200_manager',
+                'password': 'securepass',
+                'contact_person': 'Mr. Vikram Singh',
+                'email': 'vikram.singh@university200.edu.in',
+                'phone': '+91-5432109876'
+            }
+        ]
     
-    for user_data in dummy_users:
-        try:
-            self.create_institution_user(
-                user_data['institution_id'],
-                user_data['username'],
-                user_data['password'],
-                user_data['contact_person'],
-                user_data['email'],
-                user_data['phone']
-            )
-        except:
-            # User already exists, skip
-            pass
-        
+        for user_data in dummy_users:
+            try:
+                self.create_institution_user(
+                    user_data['institution_id'],
+                    user_data['username'],
+                    user_data['password'],
+                    user_data['contact_person'],
+                    user_data['email'],
+                    user_data['phone']
+                )
+            except:
+                # User already exists, skip
+                pass        
         # Create institutions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institutions (
