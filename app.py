@@ -124,26 +124,44 @@ st.set_page_config(
 
 class RAGDataExtractor:
     def __init__(self):
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.text_splitter = SimpleTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
-        self.vector_store = None
-        self.documents = []
+        try:
+            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+            self.text_splitter = SimpleTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200
+            )
+            self.vector_store = None
+            self.documents = []
+        except Exception as e:
+            st.error(f"Error initializing RAG system: {e}")
+            # Fallback: create a simple dummy embedding model
+            self.embedding_model = None
+            self.text_splitter = SimpleTextSplitter(
+                chunk_size=1000,
+                chunk_overlap=200
+            )
+            self.vector_store = None
+            self.documents = []
 
-    def build_vector_store(self, documents: List[SimpleDocument]):  # Change Document to SimpleDocument
+    def build_vector_store(self, documents: List[SimpleDocument]):
         """Build simple vector store from documents"""
-        texts = [doc.page_content for doc in documents]
-        if not texts:
+        if not documents or self.embedding_model is None:
             return None
         
-        embeddings = self.embedding_model.encode(texts)
-    
-        # Create text-embedding pairs for our simple vector store
-        text_embeddings = list(zip(texts, embeddings))
-        self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
-        self.documents = documents
+        try:
+            texts = [doc.page_content for doc in documents]
+            if not texts:
+                return None
+            
+            embeddings = self.embedding_model.encode(texts)
+        
+            # Create text-embedding pairs for our simple vector store
+            text_embeddings = list(zip(texts, embeddings))
+            self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
+            self.documents = documents
+        except Exception as e:
+            st.error(f"Error building vector store: {e}")
+            return None
         
     def extract_text_from_file(self, file) -> str:
         """Extract text from various file formats"""
@@ -268,7 +286,7 @@ class RAGDataExtractor:
         query_embedding = self.embedding_model.encode([query])
         results = self.vector_store.similarity_search_with_score(query, k=k)
         return results
-    
+
     def extract_comprehensive_data(self, uploaded_files: List) -> Dict[str, Any]:
         """Extract comprehensive data from all uploaded files"""
         all_text = ""
@@ -292,7 +310,7 @@ class RAGDataExtractor:
                 cleaned_text = self.preprocess_text(text)
                 all_text += cleaned_text + "\n\n"
             
-                # Create document for vector store - USE SimpleDocument instead of Document
+                # Create document for vector store
                 doc = SimpleDocument(
                     page_content=cleaned_text,
                     metadata={"source": file.name, "type": "institutional_data"}
@@ -313,14 +331,17 @@ class RAGDataExtractor:
                 st.error(f"Error processing {file.name}: {str(e)}")
                 continue
     
-        # Build vector store for semantic search
-        if documents:
-            self.build_vector_store(documents)
+        # Build vector store for semantic search (only if embedding model is available)
+        if documents and self.embedding_model is not None:
+            try:
+                self.build_vector_store(documents)
+            except Exception as e:
+                st.warning(f"Vector store creation skipped: {e}")
     
         all_structured_data['raw_text'] = all_text
     
         return all_structured_data
-    
+        
 class InstitutionalAIAnalyzer:
     def __init__(self):
         self.init_database()
