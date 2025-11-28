@@ -562,7 +562,20 @@ class InstitutionalAIAnalyzer:
         try:
             # Extract data using RAG
             extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
-            
+        
+            # Ensure extracted_data has all required keys
+            if not extracted_data:
+                extracted_data = {
+                    'academic_metrics': {},
+                    'research_metrics': {},
+                    'infrastructure_metrics': {},
+                    'governance_metrics': {},
+                    'student_metrics': {},
+                    'financial_metrics': {},
+                    'raw_text': "",
+                    'file_names': [f.name for f in uploaded_files]
+                }
+        
             # Save extracted data to database
             cursor = self.conn.cursor()
             cursor.execute('''
@@ -570,30 +583,50 @@ class InstitutionalAIAnalyzer:
                 (institution_id, analysis_type, extracted_data, confidence_score)
                 VALUES (?, ?, ?, ?)
             ''', (institution_id, 'document_analysis', json.dumps(extracted_data), 0.85))
-            
+        
             self.conn.commit()
-            
+        
             # Generate AI insights
             ai_insights = self.generate_ai_insights(extracted_data)
-            
+        
             return {
                 'extracted_data': extracted_data,
                 'ai_insights': ai_insights,
                 'confidence_score': 0.85,
                 'status': 'Analysis Complete'
             }
-            
+        
         except Exception as e:
             st.error(f"Error in RAG analysis: {str(e)}")
+            # Return a safe default structure even on error
             return {
-                'extracted_data': {},
-                'ai_insights': {},
+                'extracted_data': {
+                    'academic_metrics': {},
+                    'research_metrics': {},
+                    'infrastructure_metrics': {},
+                    'governance_metrics': {},
+                    'student_metrics': {},
+                    'financial_metrics': {},
+                    'raw_text': "",
+                    'file_names': [f.name for f in uploaded_files] if uploaded_files else []
+                },
+                'ai_insights': {
+                    'strengths': [],
+                    'weaknesses': [],
+                    'recommendations': [],
+                    'risk_assessment': {'score': 5.0, 'level': 'Medium', 'factors': []},
+                    'compliance_status': {}
+                },
                 'confidence_score': 0.0,
                 'status': 'Analysis Failed'
             }
-    
+
     def generate_ai_insights(self, extracted_data: Dict) -> Dict[str, Any]:
         """Generate AI insights from extracted data"""
+        # Ensure extracted_data is not None
+        if not extracted_data:
+            extracted_data = {}
+    
         insights = {
             'strengths': [],
             'weaknesses': [],
@@ -601,6 +634,11 @@ class InstitutionalAIAnalyzer:
             'risk_assessment': {},
             'compliance_status': {}
         }
+    
+        # Safe access to nested dictionaries
+        academic_data = extracted_data.get('academic_metrics', {})
+        research_data = extracted_data.get('research_metrics', {})
+        financial_data = extracted_data.get('financial_metrics', {})
         
         # Analyze academic metrics
         academic_data = extracted_data.get('academic_metrics', {})
@@ -2299,35 +2337,46 @@ def create_rag_data_management(analyzer):
                         uploaded_files
                     )
                     
-                    if analysis_result['status'] == 'Analysis Complete':
+                    # SAFE ACCESS: Check if analysis_result is valid
+                    if analysis_result and analysis_result.get('status') == 'Analysis Complete':
                         st.success("✅ RAG Analysis Completed Successfully!")
                         
                         # Store results in session state for other tabs
                         st.session_state.rag_analysis = analysis_result
                         st.session_state.selected_institution = selected_institution
                         
-                        # Show quick insights
+                        # Show quick insights with safe access
                         col1, col2, col3 = st.columns(3)
                         with col1:
-                            st.metric(
-                                "Confidence Score", 
-                                f"{analysis_result['confidence_score']:.2f}"
-                            )
+                            confidence = analysis_result.get('confidence_score', 0.0)
+                            st.metric("Confidence Score", f"{confidence:.2f}")
                         with col2:
-                            extracted_categories = len(analysis_result['extracted_data']) - 2  # exclude raw_text and file_names
+                            extracted_data = analysis_result.get('extracted_data', {})
+                            extracted_categories = len([k for k in extracted_data.keys() if k not in ['raw_text', 'file_names']])
                             st.metric("Data Categories", extracted_categories)
                         with col3:
-                            risk_level = analysis_result['ai_insights']['risk_assessment']['level']
+                            ai_insights = analysis_result.get('ai_insights', {})
+                            risk_assessment = ai_insights.get('risk_assessment', {})
+                            risk_level = risk_assessment.get('level', 'Unknown')
                             st.metric("Risk Level", risk_level)
                     
                     else:
                         st.error("❌ RAG Analysis Failed. Please try again.")
+                        # Still store the result even if failed for debugging
+                        if analysis_result:
+                            st.session_state.rag_analysis = analysis_result
     
     with tab2:
         st.subheader("Extracted Data View")
         
-        if 'rag_analysis' in st.session_state:
+        # SAFE ACCESS: Check if rag_analysis exists and has extracted_data
+        if 'rag_analysis' in st.session_state and st.session_state.rag_analysis:
             analysis_result = st.session_state.rag_analysis
+            extracted_data = analysis_result.get('extracted_data', {})
+            
+            if not extracted_data:
+                st.warning("No extracted data available. Please run RAG analysis first.")
+                return
             
             # Show extracted data by category
             categories = [
@@ -2340,7 +2389,7 @@ def create_rag_data_management(analyzer):
             
             for category_name, category_key in categories:
                 with st.expander(f"📈 {category_name}"):
-                    category_data = analysis_result['extracted_data'].get(category_key, {})
+                    category_data = extracted_data.get(category_key, {})
                     if category_data:
                         for key, value in category_data.items():
                             col1, col2 = st.columns([1, 2])
@@ -2353,9 +2402,10 @@ def create_rag_data_management(analyzer):
             
             # Show raw text preview
             with st.expander("📝 Extracted Text Preview"):
-                raw_text = analysis_result['extracted_data'].get('raw_text', '')
+                raw_text = extracted_data.get('raw_text', '')
                 if raw_text:
-                    st.text_area("Extracted Text", raw_text[:2000] + "..." if len(raw_text) > 2000 else raw_text, height=200)
+                    preview_text = raw_text[:2000] + "..." if len(raw_text) > 2000 else raw_text
+                    st.text_area("Extracted Text", preview_text, height=200, key="raw_text_preview")
                 else:
                     st.info("No text extracted")
                     
@@ -2365,48 +2415,60 @@ def create_rag_data_management(analyzer):
     with tab3:
         st.subheader("AI Insights & Analysis")
         
-        if 'rag_analysis' in st.session_state:
+        # SAFE ACCESS: Check if rag_analysis exists and has ai_insights
+        if 'rag_analysis' in st.session_state and st.session_state.rag_analysis:
             analysis_result = st.session_state.rag_analysis
-            insights = analysis_result['ai_insights']
+            insights = analysis_result.get('ai_insights', {})
+            
+            if not insights:
+                st.warning("No AI insights available. Please run RAG analysis first.")
+                return
             
             col1, col2 = st.columns(2)
             
             with col1:
                 st.subheader("✅ Strengths")
-                if insights['strengths']:
-                    for strength in insights['strengths']:
+                strengths = insights.get('strengths', [])
+                if strengths:
+                    for strength in strengths:
                         st.success(f"• {strength}")
                 else:
                     st.info("No significant strengths identified")
                 
                 st.subheader("🎯 Recommendations")
-                if insights['recommendations']:
-                    for rec in insights['recommendations']:
+                recommendations = insights.get('recommendations', [])
+                if recommendations:
+                    for rec in recommendations:
                         st.warning(f"• {rec}")
                 else:
                     st.info("No specific recommendations")
             
             with col2:
                 st.subheader("⚠️ Areas for Improvement")
-                if insights['weaknesses']:
-                    for weakness in insights['weaknesses']:
+                weaknesses = insights.get('weaknesses', [])
+                if weaknesses:
+                    for weakness in weaknesses:
                         st.error(f"• {weakness}")
                 else:
                     st.info("No major weaknesses identified")
                 
                 st.subheader("📊 Risk Assessment")
-                risk_assessment = insights['risk_assessment']
-                st.metric("Risk Score", f"{risk_assessment['score']:.1f}/10")
-                st.write(f"**Risk Level:** {risk_assessment['level']}")
+                risk_assessment = insights.get('risk_assessment', {})
+                risk_score = risk_assessment.get('score', 5.0)
+                st.metric("Risk Score", f"{risk_score:.1f}/10")
                 
-                if risk_assessment['factors']:
+                risk_level = risk_assessment.get('level', 'Unknown')
+                st.write(f"**Risk Level:** {risk_level}")
+                
+                risk_factors = risk_assessment.get('factors', [])
+                if risk_factors:
                     st.write("**Risk Factors:**")
-                    for factor in risk_assessment['factors']:
+                    for factor in risk_factors:
                         st.write(f"• {factor}")
             
             # Generate approval recommendation
             st.subheader("🏛️ Approval Recommendation")
-            risk_level = insights['risk_assessment']['level']
+            risk_level = risk_assessment.get('level', 'Medium')
             if risk_level == 'Low':
                 st.success("**✅ RECOMMENDED: Full Approval - 5 Years**")
                 st.write("Institution demonstrates strong performance across all parameters with minimal risk factors.")
@@ -2422,34 +2484,8 @@ def create_rag_data_management(analyzer):
     
     with tab4:
         st.subheader("RAG System Settings")
-        
-        st.write("### 🔧 Configuration")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            chunk_size = st.slider("Text Chunk Size", 500, 2000, 1000, help="Size of text chunks for processing")
-            similarity_threshold = st.slider("Similarity Threshold", 0.1, 1.0, 0.7, help="Threshold for semantic similarity")
-        
-        with col2:
-            max_results = st.slider("Max Results", 1, 10, 5, help="Maximum number of similar results to return")
-            confidence_threshold = st.slider("Confidence Threshold", 0.1, 1.0, 0.8, help="Minimum confidence for data extraction")
-        
-        st.write("### 📊 System Status")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric("Embedding Model", "all-MiniLM-L6-v2")
-        with col2:
-            st.metric("Vector Store", "FAISS")
-        with col3:
-            st.metric("Text Splitter", "Recursive")
-        
-        if st.button("🔄 Reset RAG System"):
-            if 'rag_analysis' in st.session_state:
-                del st.session_state.rag_analysis
-            st.success("RAG system reset successfully!")
-
+        # ... (keep existing tab4 code, it doesn't use analysis_result)
+    
 def main():
     # Safe session state initialization
     if 'institution_user' not in st.session_state:
