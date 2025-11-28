@@ -3,744 +3,858 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 import warnings
 warnings.filterwarnings('ignore')
 
-# Add missing imports
-from typing import Dict, List, Tuple
+# Additional imports for enhanced functionality
+from datetime import datetime, timedelta
 import json
-
-# Fix PyTorch conflict with Streamlit
-import os
-os.environ["STREAMLIT_SERVER_ENABLE_FILE_WATCHER"] = "false"
+from typing import Dict, List, Tuple, Any
+import hashlib
 
 # Page configuration
 st.set_page_config(
-    page_title="AI-Powered UGC/AICTE Analytics Platform",
-    page_icon="🎓",
+    page_title="AI-Powered Institutional Approval System - UGC/AICTE",
+    page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-class DocumentComplianceAnalyzer:
+class InstitutionalAIAnalyzer:
     def __init__(self):
-        self.mandatory_documents = self.get_mandatory_document_list()
-        self.compliance_thresholds = self.get_compliance_thresholds()
-    
-    def get_mandatory_document_list(self) -> List[Dict]:
-        """Define mandatory documents for new technical institutions"""
-        return [
-            {"id": "DOC-001", "name": "Affidavit 2", "category": "Legal", "critical": True},
-            {"id": "DOC-002", "name": "Approved Building Plan", "category": "Infrastructure", "critical": True},
-            {"id": "DOC-003", "name": "Land Ownership/Lease Deed", "category": "Infrastructure", "critical": True},
-            {"id": "DOC-004", "name": "Occupancy/Completion Certificate", "category": "Infrastructure", "critical": True},
-            {"id": "DOC-005", "name": "Fire Safety Certificate", "category": "Safety", "critical": True},
-            {"id": "DOC-006", "name": "Financial Certificate (Bank)", "category": "Financial", "critical": True},
-            {"id": "DOC-007", "name": "Trust/Society/Company Registration", "category": "Legal", "critical": True},
-            {"id": "DOC-008", "name": "Resolution in Format 3", "category": "Administrative", "critical": True},
-            {"id": "DOC-009", "name": "Faculty Roster/List", "category": "Academic", "critical": False},
-            {"id": "DOC-010", "name": "Building Area Statement", "category": "Infrastructure", "critical": False},
-            {"id": "DOC-011", "name": "Structural Stability Certificate", "category": "Infrastructure", "critical": False},
-            {"id": "DOC-012", "name": "Library Inventory", "category": "Academic", "critical": False},
-        ]
-    
-    def get_compliance_thresholds(self) -> Dict:
-        """Define compliance thresholds from AICTE handbook"""
+        self.historical_data = self.generate_comprehensive_historical_data()
+        self.performance_metrics = self.define_performance_metrics()
+        self.document_requirements = self.define_document_requirements()
+        
+    def define_performance_metrics(self) -> Dict[str, Dict]:
+        """Define key performance indicators for institutional evaluation"""
         return {
-            "faculty_student_ratio_ug_engineering": 20,
-            "faculty_student_ratio_ug_management": 25,
-            "admin_area_min": 750,
-            "amenities_area_min": 500,
-            "internet_bandwidth_0_300": 100,
-            "min_lease_period": 30,
-            "placement_rate_min": 60,
-            "document_sufficiency_min": 85,
-            "infrastructure_score_min": 7,
-            "compliance_score_min": 8
+            "academic_excellence": {
+                "weight": 0.25,
+                "sub_metrics": {
+                    "naac_grade": 0.30,
+                    "nirf_ranking": 0.25,
+                    "student_faculty_ratio": 0.20,
+                    "phd_faculty_ratio": 0.15,
+                    "curriculum_innovation": 0.10
+                }
+            },
+            "research_innovation": {
+                "weight": 0.20,
+                "sub_metrics": {
+                    "publications_per_faculty": 0.30,
+                    "research_grants": 0.25,
+                    "patents_filed": 0.20,
+                    "conferences_organized": 0.15,
+                    "industry_collaborations": 0.10
+                }
+            },
+            "infrastructure_facilities": {
+                "weight": 0.15,
+                "sub_metrics": {
+                    "campus_area": 0.25,
+                    "digital_infrastructure": 0.25,
+                    "library_resources": 0.20,
+                    "laboratory_equipment": 0.20,
+                    "hostel_facilities": 0.10
+                }
+            },
+            "governance_administration": {
+                "weight": 0.15,
+                "sub_metrics": {
+                    "financial_stability": 0.30,
+                    "administrative_efficiency": 0.25,
+                    "compliance_record": 0.25,
+                    "grievance_redressal": 0.20
+                }
+            },
+            "student_development": {
+                "weight": 0.15,
+                "sub_metrics": {
+                    "placement_rate": 0.35,
+                    "higher_education_rate": 0.20,
+                    "entrepreneurship_cell": 0.15,
+                    "extracurricular_activities": 0.15,
+                    "alumni_network": 0.15
+                }
+            },
+            "social_impact": {
+                "weight": 0.10,
+                "sub_metrics": {
+                    "community_engagement": 0.30,
+                    "rural_outreach": 0.25,
+                    "inclusive_education": 0.25,
+                    "environmental_initiatives": 0.20
+                }
+            }
         }
     
-    def check_document_presence(self, uploaded_files: List[str]) -> Tuple[pd.DataFrame, bool]:
-        """Check which mandatory documents are present"""
-        document_status = []
-        all_critical_present = True
-        
-        for doc in self.mandatory_documents:
-            status = "Missing"
-            note = "Document not found"
-            
-            # Simulate document checking (in real implementation, this would use file parsing)
-            for uploaded_file in uploaded_files:
-                if doc["name"].lower() in uploaded_file.lower():
-                    status = "Present"
-                    note = "Document verified"
-                    break
-            
-            if doc["critical"] and status == "Missing":
-                all_critical_present = False
-            
-            document_status.append({
-                "Document ID": doc["id"],
-                "Document Name": doc["name"],
-                "Category": doc["category"],
-                "Critical": "Yes" if doc["critical"] else "No",
-                "Status": status,
-                "Note": note
-            })
-        
-        return pd.DataFrame(document_status), all_critical_present
+    def define_document_requirements(self) -> Dict[str, Dict]:
+        """Define document requirements for different approval types"""
+        return {
+            "new_approval": {
+                "mandatory": [
+                    "affidavit_legal_status", "land_documents", "building_plan_approval",
+                    "infrastructure_details", "financial_solvency_certificate",
+                    "faculty_recruitment_plan", "academic_curriculum", "governance_structure"
+                ],
+                "supporting": [
+                    "feasibility_report", "market_demand_analysis", "five_year_development_plan",
+                    "industry_partnerships", "research_facilities_plan"
+                ]
+            },
+            "renewal_approval": {
+                "mandatory": [
+                    "previous_approval_letters", "annual_reports", "financial_audit_reports",
+                    "faculty_student_data", "infrastructure_utilization", "academic_performance"
+                ],
+                "supporting": [
+                    "naac_accreditation", "nirf_data", "research_publications",
+                    "placement_records", "social_impact_reports"
+                ]
+            },
+            "expansion_approval": {
+                "mandatory": [
+                    "current_status_report", "expansion_justification", "additional_infrastructure",
+                    "enhanced_faculty_plan", "financial_viability", "market_analysis"
+                ],
+                "supporting": [
+                    "stakeholder_feedback", "alumni_support", "industry_demand",
+                    "government_schemes_participation"
+                ]
+            }
+        }
     
-    def extract_parameter_values(self, document_data: Dict) -> Dict:
-        """Extract actual parameter values from documents (simulated RAG)"""
-        # In real implementation, this would use actual document parsing and RAG
-        extracted_values = {}
+    def generate_comprehensive_historical_data(self) -> pd.DataFrame:
+        """Generate comprehensive historical data for institutions"""
+        np.random.seed(42)
+        n_institutions = 300
+        years_of_data = 5
         
-        # Simulate extracted values based on document presence
-        if document_data.get("Faculty Roster", False):
-            extracted_values["faculty_count"] = np.random.randint(30, 100)
-            extracted_values["student_intake"] = np.random.randint(500, 2000)
-            extracted_values["faculty_student_ratio"] = extracted_values["faculty_count"] / extracted_values["student_intake"]
+        institutions_data = []
         
-        if document_data.get("Building Area Statement", False):
-            extracted_values["admin_area"] = np.random.randint(600, 900)
-            extracted_values["amenities_area"] = np.random.randint(400, 700)
-        
-        if document_data.get("Financial Certificate", False):
-            extracted_values["working_capital"] = np.random.randint(5000000, 20000000)
-        
-        return extracted_values
-    
-    def analyze_compliance(self, extracted_values: Dict) -> pd.DataFrame:
-        """Compare extracted values with thresholds"""
-        compliance_results = []
-        
-        parameters = [
-            ("faculty_student_ratio", "Faculty-Student Ratio", "faculty_student_ratio_ug_engineering", "students_per_faculty", "Lower"),
-            ("admin_area", "Administrative Area", "admin_area_min", "sq_m", "Higher"),
-            ("amenities_area", "Amenities Area", "amenities_area_min", "sq_m", "Higher"),
-            ("placement_rate", "Placement Rate", "placement_rate_min", "percentage", "Higher")
-        ]
-        
-        for param_key, param_name, threshold_key, unit, better_direction in parameters:
-            if param_key in extracted_values:
-                actual = extracted_values[param_key]
-                threshold = self.compliance_thresholds.get(threshold_key, 0)
+        for inst_id in range(1, n_institutions + 1):
+            base_quality = np.random.uniform(0.3, 0.9)  # Base institutional quality
+            
+            for year_offset in range(years_of_data):
+                year = 2023 - year_offset
+                inst_trend = base_quality + (year_offset * 0.02)  # Slight improvement trend
                 
-                if better_direction == "Higher":
-                    is_compliant = actual >= threshold
-                    gap = threshold - actual if actual < threshold else 0
-                else:  # Lower is better
-                    is_compliant = actual <= threshold
-                    gap = actual - threshold if actual > threshold else 0
+                # Academic Excellence
+                naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
+                naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
+                naac_grade = np.random.choice(naac_grades, p=naac_probs)
                 
-                compliance_results.append({
-                    "Parameter": param_name,
-                    "Actual Value": f"{actual:.2f}",
-                    "Threshold": f"{threshold}",
-                    "Status": "Compliant" if is_compliant else "Non-Compliant",
-                    "Gap": f"{gap:.2f}",
-                    "Unit": unit
+                nirf_rank = np.random.choice(list(range(1, 201)) + [None]*100)
+                student_faculty_ratio = np.random.uniform(15, 35)
+                phd_faculty_ratio = np.random.uniform(0.3, 0.9)
+                
+                # Research & Innovation
+                publications = np.random.poisson(inst_trend * 50)
+                research_grants = np.random.poisson(inst_trend * 20) * 100000
+                patents = np.random.poisson(inst_trend * 5)
+                
+                # Infrastructure
+                digital_infrastructure_score = np.random.uniform(5, 10)
+                library_volumes = np.random.randint(5000, 50000)
+                
+                # Governance
+                financial_stability = np.random.uniform(6, 10)
+                compliance_score = np.random.uniform(7, 10)
+                
+                # Student Development
+                placement_rate = np.random.uniform(60, 95)
+                higher_education_rate = np.random.uniform(10, 40)
+                
+                # Social Impact
+                community_projects = np.random.poisson(inst_trend * 10)
+                
+                # Government Schemes Participation
+                scheme_participation = {
+                    'rusa': np.random.choice([0, 1], p=[0.4, 0.6]),
+                    'nmeict': np.random.choice([0, 1], p=[0.5, 0.5]),
+                    'fist': np.random.choice([0, 1], p=[0.6, 0.4]),
+                    'dst_schemes': np.random.choice([0, 1], p=[0.7, 0.3])
+                }
+                
+                # Calculate overall performance score
+                performance_score = self.calculate_performance_score({
+                    'naac_grade': naac_grade,
+                    'nirf_ranking': nirf_rank,
+                    'student_faculty_ratio': student_faculty_ratio,
+                    'phd_faculty_ratio': phd_faculty_ratio,
+                    'publications_per_faculty': publications / max(1, np.random.randint(50, 200)),
+                    'research_grants': research_grants,
+                    'digital_infrastructure': digital_infrastructure_score,
+                    'financial_stability': financial_stability,
+                    'placement_rate': placement_rate,
+                    'community_engagement': community_projects
+                })
+                
+                institutions_data.append({
+                    'institution_id': f'INST_{inst_id:04d}',
+                    'institution_name': f'University/College {inst_id:03d}',
+                    'year': year,
+                    'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College']),
+                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh']),
+                    'established_year': np.random.randint(1950, 2015),
+                    
+                    # Academic Metrics
+                    'naac_grade': naac_grade,
+                    'nirf_ranking': nirf_rank,
+                    'student_faculty_ratio': student_faculty_ratio,
+                    'phd_faculty_ratio': phd_faculty_ratio,
+                    
+                    # Research Metrics
+                    'research_publications': publications,
+                    'research_grants_amount': research_grants,
+                    'patents_filed': patents,
+                    'industry_collaborations': np.random.poisson(inst_trend * 8),
+                    
+                    # Infrastructure Metrics
+                    'digital_infrastructure_score': digital_infrastructure_score,
+                    'library_volumes': library_volumes,
+                    'laboratory_equipment_score': np.random.uniform(6, 10),
+                    
+                    # Governance Metrics
+                    'financial_stability_score': financial_stability,
+                    'compliance_score': compliance_score,
+                    'administrative_efficiency': np.random.uniform(6, 10),
+                    
+                    # Student Development Metrics
+                    'placement_rate': placement_rate,
+                    'higher_education_rate': higher_education_rate,
+                    'entrepreneurship_cell_score': np.random.uniform(5, 10),
+                    
+                    # Social Impact Metrics
+                    'community_projects': community_projects,
+                    'rural_outreach_score': np.random.uniform(4, 10),
+                    'inclusive_education_index': np.random.uniform(6, 10),
+                    
+                    # Government Schemes Participation
+                    'rusa_participation': scheme_participation['rusa'],
+                    'nmeict_participation': scheme_participation['nmeict'],
+                    'fist_participation': scheme_participation['fist'],
+                    'dst_participation': scheme_participation['dst_schemes'],
+                    
+                    # Overall Performance
+                    'performance_score': performance_score,
+                    'approval_recommendation': self.generate_approval_recommendation(performance_score),
+                    'risk_level': self.assess_risk_level(performance_score)
                 })
         
-        return pd.DataFrame(compliance_results)
-
-class AdvancedUGC_AICTE_Analytics:
-    def __init__(self):
-        self.sample_data = self.generate_comprehensive_data()
-        self.scaler = StandardScaler()
-        self.model = RandomForestClassifier(n_estimators=50, random_state=42)
-        self.compliance_analyzer = DocumentComplianceAnalyzer()
-        
-    def generate_comprehensive_data(self):
-        """Generate comprehensive institutional data"""
-        np.random.seed(42)
-        n_institutions = 150
-        
-        data = {
-            'institution_id': range(1, n_institutions + 1),
-            'institution_name': [f'Institute_{i:03d}' for i in range(1, n_institutions + 1)],
-            'established_year': np.random.randint(1950, 2020, n_institutions),
-            'institution_type': np.random.choice(['University', 'College', 'Technical Institute', 'Research Center'], n_institutions),
-            'ownership': np.random.choice(['Government', 'Private', 'Deemed', 'Autonomous'], n_institutions),
-            'state': np.random.choice([
-                'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 
-                'Kerala', 'Gujarat', 'Rajasthan', 'West Bengal', 'Andhra Pradesh'
-            ], n_institutions),
-            'naac_grade': np.random.choice(['A++', 'A+', 'A', 'B++', 'B+', 'B'], n_institutions, p=[0.05, 0.1, 0.15, 0.3, 0.25, 0.15]),
-            'nirf_ranking': np.random.choice(range(1, 201), n_institutions),
-            'total_faculty': np.random.randint(50, 500, n_institutions),
-            'student_strength': np.random.randint(1000, 15000, n_institutions),
-            'research_publications': np.random.randint(0, 500, n_institutions),
-            'patents_filed': np.random.randint(0, 50, n_institutions),
-            'placement_rate': np.random.uniform(60, 95, n_institutions),
-            'infrastructure_score': np.random.uniform(5, 10, n_institutions),
-            'financial_stability': np.random.uniform(5, 10, n_institutions),
-            'compliance_score': np.random.uniform(6, 10, n_institutions),
-            'documents_submitted': np.random.randint(70, 100, n_institutions),
-            'required_documents': 100,
-            'industry_collaborations': np.random.randint(0, 20, n_institutions),
-            'international_students': np.random.randint(0, 200, n_institutions),
-        }
-        
-        df = pd.DataFrame(data)
-        
-        # Calculate derived metrics
-        df['document_sufficiency'] = (df['documents_submitted'] / df['required_documents']) * 100
-        df['faculty_student_ratio'] = df['total_faculty'] / df['student_strength']
-        df['research_intensity'] = df['research_publications'] / np.maximum(df['total_faculty'], 1)
-        
-        # Generate approval status with sophisticated logic
-        approval_score = (
-            df['naac_grade'].map({'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5}) * 0.25 +
-            (1 - (df['nirf_ranking'] / 200)) * 0.15 +
-            (df['placement_rate'] / 100) * 0.20 +
-            (df['infrastructure_score'] / 10) * 0.15 +
-            (df['compliance_score'] / 10) * 0.15 +
-            (df['document_sufficiency'] / 100) * 0.10
-        )
-        
-        df['approval_probability'] = approval_score
-        df['approval_status'] = np.where(
-            approval_score > 0.7, 'Approved',
-            np.where(approval_score > 0.5, 'Pending', 'Rejected')
-        )
-        
-        # Add risk level
-        df['risk_level'] = np.where(
-            approval_score > 0.7, 'Low',
-            np.where(approval_score > 0.5, 'Medium', 'High')
-        )
-        
-        return df
+        return pd.DataFrame(institutions_data)
     
-    def train_ai_models(self, df):
-        """Train AI models for different tasks"""
-        feature_columns = [
-            'naac_grade', 'nirf_ranking', 'placement_rate', 'infrastructure_score',
-            'compliance_score', 'document_sufficiency', 'research_publications'
-        ]
+    def calculate_performance_score(self, metrics: Dict) -> float:
+        """Calculate overall performance score based on weighted metrics"""
+        score = 0
+        total_weight = 0
         
-        X = pd.get_dummies(df[feature_columns], columns=['naac_grade'])
-        y_approval = df['approval_status']
+        # NAAC Grade scoring
+        naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
+        naac_score = naac_scores.get(metrics['naac_grade'], 5)
+        score += naac_score * 0.15
         
-        X_scaled = self.scaler.fit_transform(X)
-        self.model.fit(X_scaled, y_approval)
+        # NIRF Ranking scoring (inverse)
+        nirf_score = 0
+        if metrics['nirf_ranking'] and metrics['nirf_ranking'] <= 200:
+            nirf_score = (201 - metrics['nirf_ranking']) / 200 * 10
+        score += nirf_score * 0.10
         
-        return self.model, self.scaler, feature_columns
+        # Student-Faculty Ratio (lower is better)
+        sf_ratio_score = max(0, 10 - (metrics['student_faculty_ratio'] - 15) / 2)
+        score += sf_ratio_score * 0.10
+        
+        # PhD Faculty Ratio
+        phd_score = metrics['phd_faculty_ratio'] * 10
+        score += phd_score * 0.10
+        
+        # Research Publications
+        pub_score = min(10, metrics['publications_per_faculty'] * 2)
+        score += pub_score * 0.10
+        
+        # Research Grants (log scale)
+        grant_score = min(10, np.log1p(metrics['research_grants'] / 100000) * 2)
+        score += grant_score * 0.10
+        
+        # Infrastructure
+        infra_score = metrics['digital_infrastructure']
+        score += infra_score * 0.10
+        
+        # Financial Stability
+        financial_score = metrics['financial_stability']
+        score += financial_score * 0.10
+        
+        # Placement Rate
+        placement_score = metrics['placement_rate'] / 10
+        score += placement_score * 0.10
+        
+        # Community Engagement
+        community_score = min(10, metrics['community_engagement'] / 2)
+        score += community_score * 0.05
+        
+        return min(10, score)
     
-    def generate_ai_recommendations(self, institution_data: Dict) -> Dict:
-        """Generate AI-powered recommendations"""
-        recommendations = {
-            "immediate_actions": [],
-            "strategic_improvements": [],
-            "compliance_suggestions": [],
-            "risk_factors": [],
-            "success_indicators": []
+    def generate_approval_recommendation(self, performance_score: float) -> str:
+        """Generate approval recommendation based on performance score"""
+        if performance_score >= 8.0:
+            return "Full Approval - 5 Years"
+        elif performance_score >= 7.0:
+            return "Provisional Approval - 3 Years"
+        elif performance_score >= 6.0:
+            return "Conditional Approval - 1 Year"
+        elif performance_score >= 5.0:
+            return "Approval with Strict Monitoring - 1 Year"
+        else:
+            return "Rejection - Significant Improvements Required"
+    
+    def assess_risk_level(self, performance_score: float) -> str:
+        """Assess institutional risk level"""
+        if performance_score >= 8.0:
+            return "Low Risk"
+        elif performance_score >= 6.5:
+            return "Medium Risk"
+        elif performance_score >= 5.0:
+            return "High Risk"
+        else:
+            return "Critical Risk"
+    
+    def analyze_document_sufficiency(self, uploaded_docs: List[str], approval_type: str) -> Dict:
+        """Analyze document sufficiency percentage"""
+        requirements = self.document_requirements[approval_type]
+        
+        mandatory_present = sum(1 for doc in requirements['mandatory'] 
+                              if any(doc in uploaded_doc for uploaded_doc in uploaded_docs))
+        supporting_present = sum(1 for doc in requirements['supporting'] 
+                               if any(doc in uploaded_doc for uploaded_doc in uploaded_docs))
+        
+        total_mandatory = len(requirements['mandatory'])
+        total_supporting = len(requirements['supporting'])
+        
+        mandatory_sufficiency = (mandatory_present / total_mandatory) * 100
+        overall_sufficiency = ((mandatory_present + supporting_present) / 
+                             (total_mandatory + total_supporting)) * 100
+        
+        return {
+            'mandatory_sufficiency': mandatory_sufficiency,
+            'overall_sufficiency': overall_sufficiency,
+            'missing_mandatory': [doc for doc in requirements['mandatory'] 
+                                if not any(doc in uploaded_doc for uploaded_doc in uploaded_docs)],
+            'missing_supporting': [doc for doc in requirements['supporting'] 
+                                 if not any(doc in uploaded_doc for uploaded_doc in uploaded_docs)],
+            'recommendations': self.generate_document_recommendations(mandatory_sufficiency)
         }
+    
+    def generate_document_recommendations(self, mandatory_sufficiency: float) -> List[str]:
+        """Generate recommendations based on document sufficiency"""
+        recommendations = []
         
-        # Analyze institutional data
-        placement_rate = institution_data.get('placement_rate', 0)
-        infrastructure_score = institution_data.get('infrastructure_score', 0)
-        research_publications = institution_data.get('research_publications', 0)
-        compliance_score = institution_data.get('compliance_score', 0)
-        document_sufficiency = institution_data.get('document_sufficiency', 0)
-        naac_grade = institution_data.get('naac_grade', 'B+')
+        if mandatory_sufficiency < 100:
+            recommendations.append("Upload all mandatory documents to proceed with approval process")
         
-        # Generate specific recommendations
-        if placement_rate < 75:
-            recommendations["immediate_actions"].append(
-                "Establish dedicated placement cell with industry partnerships"
-            )
-            recommendations["risk_factors"].append(f"Low placement rate: {placement_rate}% (Target: 75%+)")
-        else:
-            recommendations["success_indicators"].append(f"Strong placement rate: {placement_rate}%")
+        if mandatory_sufficiency < 80:
+            recommendations.append("Critical documents missing - application cannot be processed")
         
-        if infrastructure_score < 7:
-            recommendations["immediate_actions"].append(
-                "Upgrade laboratory equipment and digital infrastructure facilities"
-            )
-            recommendations["risk_factors"].append(f"Infrastructure score low: {infrastructure_score}/10")
-        else:
-            recommendations["success_indicators"].append(f"Good infrastructure: {infrastructure_score}/10")
-        
-        if research_publications < 50:
-            recommendations["strategic_improvements"].append(
-                "Establish research centers and provide faculty research grants"
-            )
-            recommendations["risk_factors"].append(f"Low research output: {research_publications} publications")
-        else:
-            recommendations["success_indicators"].append(f"Strong research: {research_publications} publications")
-        
-        if compliance_score < 8:
-            recommendations["compliance_suggestions"].append(
-                "Conduct comprehensive compliance audit and address statutory requirements"
-            )
-            recommendations["risk_factors"].append(f"Compliance issues: {compliance_score}/10")
-        else:
-            recommendations["success_indicators"].append(f"Good compliance: {compliance_score}/10")
-        
-        if document_sufficiency < 85:
-            recommendations["immediate_actions"].append(
-                f"Complete pending documentation. Current: {document_sufficiency}% (Target: 85%+)"
-            )
-        
-        # NAAC grade based recommendations
-        if naac_grade in ['A++', 'A+']:
-            recommendations["success_indicators"].append(f"Excellent NAAC accreditation: {naac_grade}")
-        elif naac_grade in ['B+', 'B']:
-            recommendations["strategic_improvements"].append(f"Focus on improving NAAC grade from {naac_grade} to A+")
+        if mandatory_sufficiency >= 100:
+            recommendations.append("All mandatory documents present - ready for comprehensive evaluation")
         
         return recommendations
     
-    def predict_with_explanation(self, institution_data):
-        """Predict with detailed explanation of factors"""
-        # Simple scoring logic
-        placement_rate = institution_data.get('placement_rate', 0)
-        infrastructure_score = institution_data.get('infrastructure_score', 0)
-        compliance_score = institution_data.get('compliance_score', 0)
-        document_sufficiency = institution_data.get('document_sufficiency', 0)
-        naac_grade = institution_data.get('naac_grade', 'B+')
+    def generate_comprehensive_report(self, institution_id: str) -> Dict[str, Any]:
+        """Generate comprehensive AI analysis report for an institution"""
+        inst_data = self.historical_data[
+            self.historical_data['institution_id'] == institution_id
+        ]
         
-        score = (
-            {'A++': 1.0, 'A+': 0.9, 'A': 0.8, 'B++': 0.7, 'B+': 0.6, 'B': 0.5}.get(naac_grade, 0.5) * 0.3 +
-            (placement_rate / 100) * 0.25 +
-            (infrastructure_score / 10) * 0.2 +
-            (compliance_score / 10) * 0.15 +
-            (document_sufficiency / 100) * 0.1
-        )
+        if inst_data.empty:
+            return {"error": "Institution not found"}
         
-        prediction = "Approved" if score > 0.7 else "Pending" if score > 0.5 else "Rejected"
-        probability = min(score, 0.95)
-        risk_level = "Low" if score > 0.7 else "Medium" if score > 0.5 else "High"
+        latest_data = inst_data[inst_data['year'] == inst_data['year'].max()].iloc[0]
+        historical_trend = inst_data.groupby('year')['performance_score'].mean()
         
-        explanation = {
-            'prediction': prediction,
-            'probability': probability,
-            'risk_level': risk_level,
-            'key_factors': [
-                (f"NAAC Grade: {naac_grade}", 0.3),
-                (f"Placement Rate: {placement_rate}%", 0.25),
-                (f"Infrastructure: {infrastructure_score}/10", 0.2)
-            ],
-            'strengths': [],
-            'weaknesses': []
+        # Performance trends
+        trend_analysis = "Improving" if len(historical_trend) > 1 and (
+            historical_trend.iloc[-1] > historical_trend.iloc[-2]) else "Stable" if len(
+            historical_trend) > 1 and historical_trend.iloc[-1] == historical_trend.iloc[-2] else "Declining"
+        
+        # Comparative analysis
+        similar_institutions = self.find_similar_institutions(institution_id)
+        
+        return {
+            "institution_info": {
+                "name": latest_data['institution_name'],
+                "type": latest_data['institution_type'],
+                "state": latest_data['state'],
+                "established": latest_data['established_year']
+            },
+            "performance_analysis": {
+                "current_score": latest_data['performance_score'],
+                "historical_trend": historical_trend.to_dict(),
+                "trend_analysis": trend_analysis,
+                "approval_recommendation": latest_data['approval_recommendation'],
+                "risk_level": latest_data['risk_level']
+            },
+            "strengths": self.identify_strengths(latest_data),
+            "weaknesses": self.identify_weaknesses(latest_data),
+            "comparative_analysis": similar_institutions,
+            "ai_recommendations": self.generate_ai_recommendations(latest_data)
         }
+    
+    def find_similar_institutions(self, institution_id: str) -> Dict:
+        """Find similar institutions for comparative analysis"""
+        inst_data = self.historical_data[
+            self.historical_data['institution_id'] == institution_id
+        ]
         
-        # Analyze strengths and weaknesses
-        if naac_grade in ['A++', 'A+', 'A']:
-            explanation['strengths'].append(f"Strong NAAC accreditation: {naac_grade}")
-        if placement_rate > 80:
-            explanation['strengths'].append(f"Excellent placement record: {placement_rate:.1f}%")
-        if document_sufficiency > 90:
-            explanation['strengths'].append(f"Complete documentation: {document_sufficiency:.1f}%")
-            
-        if infrastructure_score < 6:
-            explanation['weaknesses'].append(f"Inadequate infrastructure: {infrastructure_score}/10")
-        if compliance_score < 7:
-            explanation['weaknesses'].append(f"Compliance issues: {compliance_score}/10")
-        if placement_rate < 70:
-            explanation['weaknesses'].append(f"Placement concerns: {placement_rate:.1f}%")
+        if inst_data.empty:
+            return {}
         
-        return explanation
+        latest_data = inst_data[inst_data['year'] == inst_data['year'].max()].iloc[0]
+        
+        # Find similar institutions based on type and performance
+        similar_inst = self.historical_data[
+            (self.historical_data['institution_type'] == latest_data['institution_type']) &
+            (self.historical_data['year'] == latest_data['year']) &
+            (self.historical_data['institution_id'] != institution_id)
+        ]
+        
+        similar_inst = similar_inst.nlargest(5, 'performance_score')
+        
+        return {
+            "benchmark_institutions": similar_inst[['institution_name', 'performance_score', 'approval_recommendation']].to_dict('records'),
+            "performance_percentile": self.calculate_performance_percentile(latest_data['performance_score'], latest_data['institution_type'])
+        }
+    
+    def calculate_performance_percentile(self, score: float, inst_type: str) -> float:
+        """Calculate performance percentile within institution type"""
+        type_data = self.historical_data[
+            (self.historical_data['institution_type'] == inst_type) &
+            (self.historical_data['year'] == 2023)
+        ]
+        
+        if len(type_data) == 0:
+            return 50.0
+        
+        return (type_data['performance_score'] < score).mean() * 100
+    
+    def identify_strengths(self, institution_data: pd.Series) -> List[str]:
+        """Identify institutional strengths"""
+        strengths = []
+        
+        if institution_data['naac_grade'] in ['A++', 'A+', 'A']:
+            strengths.append(f"Excellent NAAC Accreditation: {institution_data['naac_grade']}")
+        
+        if institution_data['placement_rate'] > 80:
+            strengths.append(f"Strong Placement Record: {institution_data['placement_rate']:.1f}%")
+        
+        if institution_data['research_publications'] > 100:
+            strengths.append(f"Robust Research Output: {institution_data['research_publications']} publications")
+        
+        if institution_data['financial_stability_score'] > 8.5:
+            strengths.append("Excellent Financial Stability")
+        
+        if institution_data['phd_faculty_ratio'] > 0.7:
+            strengths.append(f"Highly Qualified Faculty: {institution_data['phd_faculty_ratio']:.1%} PhDs")
+        
+        return strengths
+    
+    def identify_weaknesses(self, institution_data: pd.Series) -> List[str]:
+        """Identify institutional weaknesses"""
+        weaknesses = []
+        
+        if institution_data['student_faculty_ratio'] > 25:
+            weaknesses.append(f"High Student-Faculty Ratio: {institution_data['student_faculty_ratio']:.1f}")
+        
+        if institution_data['placement_rate'] < 65:
+            weaknesses.append(f"Low Placement Rate: {institution_data['placement_rate']:.1f}%")
+        
+        if institution_data['research_publications'] < 20:
+            weaknesses.append(f"Inadequate Research Output: {institution_data['research_publications']} publications")
+        
+        if institution_data['digital_infrastructure_score'] < 7:
+            weaknesses.append(f"Weak Digital Infrastructure: {institution_data['digital_infrastructure_score']:.1f}/10")
+        
+        return weaknesses
+    
+    def generate_ai_recommendations(self, institution_data: pd.Series) -> List[str]:
+        """Generate AI-powered improvement recommendations"""
+        recommendations = []
+        
+        if institution_data['student_faculty_ratio'] > 25:
+            recommendations.append("Recruit additional faculty members to improve student-faculty ratio")
+        
+        if institution_data['placement_rate'] < 70:
+            recommendations.append("Strengthen industry partnerships and career development programs")
+        
+        if institution_data['research_publications'] < 50:
+            recommendations.append("Establish research promotion policy and faculty development programs")
+        
+        if institution_data['digital_infrastructure_score'] < 7:
+            recommendations.append("Invest in digital infrastructure and e-learning platforms")
+        
+        if institution_data['community_projects'] < 5:
+            recommendations.append("Enhance community engagement and social outreach programs")
+        
+        return recommendations
 
-def create_document_compliance_module(analytics):
-    st.header("📋 Document Compliance Analyzer")
-    st.info("Two-stage RAG system for document verification and compliance analysis")
+def create_performance_dashboard(analyzer):
+    st.header("📊 Institutional Performance Analytics Dashboard")
     
-    # Stage 1: Document Upload and Presence Check
-    st.subheader("📤 Stage 1: Document Upload & Verification")
+    df = analyzer.historical_data
+    current_year_data = df[df['year'] == 2023]
     
-    col1, col2 = st.columns([2, 1])
+    # Key Performance Indicators
+    st.subheader("🏆 Key Performance Indicators")
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        uploaded_files = st.file_uploader(
-            "Upload Institutional Documents",
-            type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
-            accept_multiple_files=True,
-            help="Upload all required documents for compliance checking"
-        )
-        
-        if uploaded_files:
-            file_names = [file.name for file in uploaded_files]
-            st.success(f"✅ {len(uploaded_files)} files uploaded successfully")
-            
-            # Check document presence
-            document_status_df, all_critical_present = analytics.compliance_analyzer.check_document_presence(file_names)
-            
-            # Display document status
-            st.subheader("📊 Document Status Dashboard")
-            
-            # Create status summary
-            status_summary = document_status_df['Status'].value_counts()
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                total_docs = len(document_status_df)
-                st.metric("Total Documents", total_docs)
-            
-            with col2:
-                present_docs = status_summary.get('Present', 0)
-                st.metric("Documents Present", f"{present_docs}/{total_docs}")
-            
-            with col3:
-                critical_status = "✅ Complete" if all_critical_present else "❌ Incomplete"
-                st.metric("Critical Documents", critical_status)
-            
-            # Display detailed document status
-            st.dataframe(
-                document_status_df.style.apply(
-                    lambda x: ['background-color: #ff6b6b' if v == 'Missing' and x['Critical'] == 'Yes' 
-                              else 'background-color: #d4edda' if v == 'Present' 
-                              else '' for v in x],
-                    axis=1
-                ),
-                use_container_width=True
-            )
+        avg_performance = current_year_data['performance_score'].mean()
+        st.metric("Average Performance Score", f"{avg_performance:.2f}/10")
     
     with col2:
-        st.subheader("ℹ️ Compliance Guidelines")
-        st.write("**Critical Documents:**")
-        st.write("• Affidavit 2")
-        st.write("• Approved Building Plan")
-        st.write("• Land Ownership/Lease Deed")
-        st.write("• Fire Safety Certificate")
-        st.write("• Financial Certificate")
-        
-        st.write("**Important Notes:**")
-        st.write("• All critical documents must be present")
-        st.write("• Lease period: Minimum 30 years")
-        st.write("• Documents must be duly attested")
-    
-    # Stage 2: Compliance Analysis
-    if uploaded_files and all_critical_present:
-        st.subheader("🔍 Stage 2: Compliance Parameter Analysis")
-        
-        # Simulate parameter extraction (in real implementation, this would use RAG)
-        document_data = {doc["name"]: doc["Status"] == "Present" for doc in analytics.compliance_analyzer.mandatory_documents}
-        extracted_values = analytics.compliance_analyzer.extract_parameter_values(document_data)
-        
-        if extracted_values:
-            # Analyze compliance
-            compliance_results = analytics.compliance_analyzer.analyze_compliance(extracted_values)
-            
-            # Display compliance results
-            st.subheader("📈 Compliance Analysis Results")
-            
-            # Compliance metrics
-            compliant_count = len(compliance_results[compliance_results['Status'] == 'Compliant'])
-            total_params = len(compliance_results)
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Compliance Score", f"{compliant_count}/{total_params}")
-            with col2:
-                compliance_rate = (compliant_count / total_params) * 100
-                st.metric("Compliance Rate", f"{compliance_rate:.1f}%")
-            with col3:
-                non_compliant = total_params - compliant_count
-                st.metric("Issues Found", non_compliant)
-            
-            # Display compliance table
-            st.dataframe(
-                compliance_results.style.apply(
-                    lambda x: ['background-color: #d4edda' if v == 'Compliant' else 'background-color: #f8d7da' for v in x],
-                    subset=['Status']
-                ),
-                use_container_width=True
-            )
-            
-            # Generate recommendations
-            st.subheader("💡 AI Recommendations")
-            
-            if non_compliant > 0:
-                st.warning("**🚨 Immediate Actions Required:**")
-                
-                non_compliant_params = compliance_results[compliance_results['Status'] == 'Non-Compliant']
-                for _, row in non_compliant_params.iterrows():
-                    st.write(f"• **{row['Parameter']}**: Gap of {row['Gap']} {row['Unit']} below threshold")
-                
-                st.info("**📋 Suggested Improvements:**")
-                st.write("• Review and update faculty recruitment strategy")
-                st.write("• Enhance infrastructure facilities as per AICTE norms")
-                st.write("• Strengthen industry partnerships for placements")
-            else:
-                st.success("✅ All parameters are compliant with AICTE standards!")
-                
-        else:
-            st.warning("Unable to extract sufficient data from documents for compliance analysis.")
-    
-    elif uploaded_files and not all_critical_present:
-        st.error("❌ Critical documents are missing. Please upload all required critical documents to proceed with compliance analysis.")
-
-def create_enhanced_dashboard(df):
-    st.header("🏢 Institutional Intelligence Dashboard")
-    
-    # Dashboard Overview Metrics
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    
-    with col1:
-        total_inst = len(df)
-        st.metric("Total Institutions", total_inst)
-    
-    with col2:
-        approved = len(df[df['approval_status'] == 'Approved'])
-        st.metric("Approved", f"{approved} ({approved/total_inst*100:.1f}%)")
+        approval_rate = (current_year_data['performance_score'] >= 6.0).mean()
+        st.metric("Approval Eligibility Rate", f"{approval_rate:.1%}")
     
     with col3:
-        pending = len(df[df['approval_status'] == 'Pending'])
-        st.metric("Pending", f"{pending} ({pending/total_inst*100:.1f}%)")
+        high_risk_count = (current_year_data['risk_level'] == 'High Risk').sum() + (
+            current_year_data['risk_level'] == 'Critical Risk').sum()
+        st.metric("High/Critical Risk Institutions", high_risk_count)
     
     with col4:
-        rejected = len(df[df['approval_status'] == 'Rejected'])
-        st.metric("Rejected", f"{rejected} ({rejected/total_inst*100:.1f}%)")
+        avg_placement = current_year_data['placement_rate'].mean()
+        st.metric("Average Placement Rate", f"{avg_placement:.1f}%")
     
     with col5:
-        avg_placement = df['placement_rate'].mean()
-        st.metric("Avg Placement", f"{avg_placement:.1f}%")
+        research_intensity = current_year_data['research_publications'].sum() / current_year_data['research_publications'].count()
+        st.metric("Avg Research Publications", f"{research_intensity:.1f}")
     
-    with col6:
-        avg_compliance = df['compliance_score'].mean()
-        st.metric("Avg Compliance", f"{avg_compliance:.1f}/10")
-    
-    # Filters Section
-    st.subheader("🔍 Dashboard Filters")
-    
-    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
-    
-    with filter_col1:
-        institution_types = st.multiselect(
-            "Institution Type",
-            options=df['institution_type'].unique(),
-            default=df['institution_type'].unique()
-        )
-    
-    with filter_col2:
-        ownership_types = st.multiselect(
-            "Ownership",
-            options=df['ownership'].unique(),
-            default=df['ownership'].unique()
-        )
-    
-    with filter_col3:
-        states = st.multiselect(
-            "State",
-            options=df['state'].unique(),
-            default=df['state'].unique()
-        )
-    
-    with filter_col4:
-        naac_grades = st.multiselect(
-            "NAAC Grade",
-            options=sorted(df['naac_grade'].unique()),
-            default=sorted(df['naac_grade'].unique())
-        )
-    
-    # Apply filters
-    filtered_df = df[
-        (df['institution_type'].isin(institution_types)) &
-        (df['ownership'].isin(ownership_types)) &
-        (df['state'].isin(states)) &
-        (df['naac_grade'].isin(naac_grades))
-    ]
-    
-    st.info(f"📊 Showing {len(filtered_df)} out of {len(df)} institutions")
-    
-    if len(filtered_df) == 0:
-        st.warning("No institutions match the selected filters. Please adjust your criteria.")
-        return
-    
-    # Main Visualization Grid
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # Approval Status Distribution
-        status_counts = filtered_df['approval_status'].value_counts()
-        fig1 = px.pie(
-            values=status_counts.values,
-            names=status_counts.index,
-            title="Approval Status Distribution",
-            color=status_counts.index,
-            color_discrete_map={'Approved': '#2ecc71', 'Pending': '#f39c12', 'Rejected': '#e74c3c'}
-        )
-        fig1.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig1, use_container_width=True)
-    
-    with col2:
-        # Risk Level Distribution
-        risk_counts = filtered_df['risk_level'].value_counts()
-        fig2 = px.bar(
-            x=risk_counts.index,
-            y=risk_counts.values,
-            title="Risk Level Distribution",
-            color=risk_counts.index,
-            color_discrete_map={'Low': '#27ae60', 'Medium': '#f39c12', 'High': '#e74c3c'},
-            labels={'x': 'Risk Level', 'y': 'Count'}
-        )
-        fig2.update_layout(showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
-    
-    with col3:
-        # Placement Rate vs Infrastructure Score
-        fig3 = px.scatter(
-            filtered_df,
-            x='infrastructure_score',
-            y='placement_rate',
-            color='approval_status',
-            size='student_strength',
-            hover_data=['institution_name', 'naac_grade'],
-            title="Placement Rate vs Infrastructure Score",
-            color_discrete_map={'Approved': '#2ecc71', 'Pending': '#f39c12', 'Rejected': '#e74c3c'}
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-def create_recommendation_engine(df, analytics):
-    st.header("💡 AI-Powered Recommendation Engine")
-    
-    st.info("This AI system analyzes institutional data and provides personalized improvement recommendations.")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Institution selector for recommendations
-        selected_institution = st.selectbox("Select Institution for AI Analysis", 
-                                          df['institution_name'].tolist())
-        
-        if selected_institution:
-            institution_data = df[df['institution_name'] == selected_institution].iloc[0].to_dict()
-            
-            # Get AI recommendations
-            recommendations = analytics.generate_ai_recommendations(institution_data)
-            
-            # Display recommendations
-            st.subheader(f"🎯 AI Recommendations for {selected_institution}")
-            
-            if recommendations["success_indicators"]:
-                st.success("**✅ Strengths:**")
-                for strength in recommendations["success_indicators"]:
-                    st.write(f"• {strength}")
-            
-            if recommendations["risk_factors"]:
-                st.error("**🚨 Risk Factors:**")
-                for risk in recommendations["risk_factors"]:
-                    st.write(f"• {risk}")
-            
-            if recommendations["immediate_actions"]:
-                st.warning("**🚀 Immediate Actions:**")
-                for action in recommendations["immediate_actions"]:
-                    st.write(f"• {action}")
-            
-            if recommendations["strategic_improvements"]:
-                st.info("**🎯 Strategic Improvements:**")
-                for improvement in recommendations["strategic_improvements"]:
-                    st.write(f"• {improvement}")
-    
-    with col2:
-        # Quick AI assessment
-        st.subheader("⚡ Quick Assessment")
-        if selected_institution:
-            explanation = analytics.predict_with_explanation(institution_data)
-            
-            # Display metrics
-            st.metric("AI Approval Probability", f"{explanation['probability']:.1%}")
-            st.metric("Predicted Status", explanation['prediction'])
-            
-            # Display risk level with color using emojis
-            risk_level = explanation['risk_level']
-            risk_color = "🟢" if risk_level == 'Low' else "🟡" if risk_level == 'Medium' else "🔴"
-            st.metric("Risk Level", f"{risk_color} {risk_level}")
-
-def create_predictive_analytics(analytics):
-    st.header("🔮 Predictive Analytics")
-    
-    st.info("Predict approval probabilities for institutions.")
+    # Performance Analysis
+    st.subheader("📈 Performance Analysis")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Approval Prediction")
+        # Performance Distribution
+        fig1 = px.histogram(
+            current_year_data, 
+            x='performance_score',
+            title="Distribution of Institutional Performance Scores",
+            nbins=20,
+            color_discrete_sequence=['#1f77b4']
+        )
+        fig1.update_layout(xaxis_title="Performance Score", yaxis_title="Number of Institutions")
+        st.plotly_chart(fig1, use_container_width=True)
+    
+    with col2:
+        # Performance by Institution Type
+        fig2 = px.box(
+            current_year_data,
+            x='institution_type',
+            y='performance_score',
+            title="Performance Score by Institution Type",
+            color='institution_type'
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+    
+    # Trend Analysis
+    st.subheader("📅 Historical Performance Trends")
+    
+    trend_data = df.groupby(['year', 'institution_type'])['performance_score'].mean().reset_index()
+    
+    fig3 = px.line(
+        trend_data,
+        x='year',
+        y='performance_score',
+        color='institution_type',
+        title="Average Performance Score Trend (2019-2023)",
+        markers=True
+    )
+    fig3.update_layout(xaxis_title="Year", yaxis_title="Average Performance Score")
+    st.plotly_chart(fig3, use_container_width=True)
+    
+    # Risk Analysis
+    st.subheader("⚠️ Institutional Risk Analysis")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        risk_distribution = current_year_data['risk_level'].value_counts()
+        fig4 = px.pie(
+            values=risk_distribution.values,
+            names=risk_distribution.index,
+            title="Institutional Risk Level Distribution",
+            color=risk_distribution.index,
+            color_discrete_map={
+                'Low Risk': '#2ecc71',
+                'Medium Risk': '#f39c12',
+                'High Risk': '#e74c3c',
+                'Critical Risk': '#c0392b'
+            }
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+    
+    with col2:
+        # Placement vs Research Analysis
+        fig5 = px.scatter(
+            current_year_data,
+            x='research_publications',
+            y='placement_rate',
+            color='risk_level',
+            size='performance_score',
+            hover_data=['institution_name'],
+            title="Research Output vs Placement Rate",
+            color_discrete_map={
+                'Low Risk': '#2ecc71',
+                'Medium Risk': '#f39c12',
+                'High Risk': '#e74c3c',
+                'Critical Risk': '#c0392b'
+            }
+        )
+        st.plotly_chart(fig5, use_container_width=True)
+
+def create_document_analysis_module(analyzer):
+    st.header("📋 AI-Powered Document Sufficiency Analysis")
+    
+    st.info("Analyze document completeness and generate sufficiency reports for approval processes")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Document Upload & Analysis")
         
-        with st.form("prediction_form"):
-            naac_grade = st.selectbox("NAAC Grade", ['A++', 'A+', 'A', 'B++', 'B+', 'B'])
-            placement_rate = st.slider("Placement Rate (%)", 60.0, 100.0, 80.0)
-            infrastructure_score = st.slider("Infrastructure Score", 5.0, 10.0, 7.0)
-            compliance_score = st.slider("Compliance Score", 6.0, 10.0, 8.0)
-            document_sufficiency = st.slider("Document Sufficiency (%)", 70.0, 100.0, 85.0)
+        approval_type = st.selectbox(
+            "Select Approval Type",
+            ["new_approval", "renewal_approval", "expansion_approval"],
+            format_func=lambda x: x.replace('_', ' ').title()
+        )
+        
+        uploaded_files = st.file_uploader(
+            "Upload Institutional Documents",
+            type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
+            accept_multiple_files=True,
+            help="Upload all required documents for AI analysis"
+        )
+        
+        if uploaded_files:
+            file_names = [file.name for file in uploaded_files]
             
-            submitted = st.form_submit_button("🚀 Predict Approval")
+            # Analyze document sufficiency
+            analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
             
-            if submitted:
-                institution_data = {
-                    'naac_grade': naac_grade,
-                    'placement_rate': placement_rate,
-                    'infrastructure_score': infrastructure_score,
-                    'compliance_score': compliance_score,
-                    'document_sufficiency': document_sufficiency
-                }
+            # Display results
+            st.subheader("📊 Document Sufficiency Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric(
+                    "Mandatory Documents", 
+                    f"{analysis_result['mandatory_sufficiency']:.1f}%",
+                    delta=f"{analysis_result['mandatory_sufficiency'] - 100:.1f}%" if analysis_result['mandatory_sufficiency'] < 100 else None,
+                    delta_color="inverse"
+                )
+            
+            with col2:
+                st.metric(
+                    "Overall Sufficiency", 
+                    f"{analysis_result['overall_sufficiency']:.1f}%"
+                )
+            
+            # Missing documents
+            if analysis_result['missing_mandatory']:
+                st.error("**❌ Missing Mandatory Documents:**")
+                for doc in analysis_result['missing_mandatory']:
+                    st.write(f"• {doc.replace('_', ' ').title()}")
+            
+            if analysis_result['missing_supporting']:
+                st.warning("**📝 Missing Supporting Documents:**")
+                for doc in analysis_result['missing_supporting']:
+                    st.write(f"• {doc.replace('_', ' ').title()}")
+            
+            # Recommendations
+            st.info("**💡 AI Recommendations:**")
+            for recommendation in analysis_result['recommendations']:
+                st.write(f"• {recommendation}")
+    
+    with col2:
+        st.subheader("Document Requirements Guide")
+        
+        requirements = analyzer.document_requirements
+        
+        for approval_type, docs in requirements.items():
+            with st.expander(f"{approval_type.replace('_', ' ').title()} Requirements"):
+                st.write("**Mandatory Documents:**")
+                for doc in docs['mandatory']:
+                    st.write(f"• {doc.replace('_', ' ').title()}")
                 
-                explanation = analytics.predict_with_explanation(institution_data)
+                st.write("**Supporting Documents:**")
+                for doc in docs['supporting']:
+                    st.write(f"• {doc.replace('_', ' ').title()}")
+
+def create_ai_analysis_reports(analyzer):
+    st.header("🤖 Comprehensive AI Analysis Reports")
+    
+    df = analyzer.historical_data
+    current_institutions = df[df['year'] == 2023]['institution_id'].unique()
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        selected_institution = st.selectbox(
+            "Select Institution for Detailed Analysis",
+            current_institutions
+        )
+        
+        if selected_institution:
+            # Generate comprehensive report
+            report = analyzer.generate_comprehensive_report(selected_institution)
+            
+            if "error" not in report:
+                st.subheader(f"🏛️ AI Analysis Report: {report['institution_info']['name']}")
                 
-                # Display results
-                st.success(f"**Prediction:** {explanation['prediction']}")
-                st.info(f"**Confidence:** {explanation['probability']:.1%}")
+                # Institution Overview
+                st.info("**Institution Overview**")
+                col1, col2, col3, col4 = st.columns(4)
                 
-                if explanation['strengths']:
-                    st.success("**✅ Strengths:**")
-                    for strength in explanation['strengths']:
-                        st.write(f"• {strength}")
+                with col1:
+                    st.metric("Type", report['institution_info']['type'])
+                with col2:
+                    st.metric("State", report['institution_info']['state'])
+                with col3:
+                    st.metric("Established", report['institution_info']['established'])
+                with col4:
+                    st.metric("Performance Score", f"{report['performance_analysis']['current_score']:.2f}/10")
                 
-                if explanation['weaknesses']:
-                    st.error("**⚠️ Improvements Needed:**")
-                    for weakness in explanation['weaknesses']:
-                        st.write(f"• {weakness}")
+                # Approval Recommendation
+                rec_color = {
+                    "Full Approval - 5 Years": "green",
+                    "Provisional Approval - 3 Years": "blue", 
+                    "Conditional Approval - 1 Year": "orange",
+                    "Approval with Strict Monitoring - 1 Year": "red",
+                    "Rejection - Significant Improvements Required": "darkred"
+                }.get(report['performance_analysis']['approval_recommendation'], "gray")
+                
+                st.metric(
+                    "AI Recommendation", 
+                    report['performance_analysis']['approval_recommendation'],
+                    delta=report['performance_analysis']['trend_analysis'],
+                    delta_color="off" if report['performance_analysis']['trend_analysis'] == "Stable" else 
+                               "normal" if report['performance_analysis']['trend_analysis'] == "Improving" else "inverse"
+                )
+                
+                # Strengths and Weaknesses
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if report['strengths']:
+                        st.success("**✅ Institutional Strengths**")
+                        for strength in report['strengths']:
+                            st.write(f"• {strength}")
+                
+                with col2:
+                    if report['weaknesses']:
+                        st.error("**⚠️ Areas for Improvement**")
+                        for weakness in report['weaknesses']:
+                            st.write(f"• {weakness}")
+                
+                # AI Recommendations
+                if report['ai_recommendations']:
+                    st.warning("**🎯 AI Improvement Recommendations**")
+                    for recommendation in report['ai_recommendations']:
+                        st.write(f"• {recommendation}")
+                
+                # Comparative Analysis
+                st.info("**📊 Comparative Analysis**")
+                if report['comparative_analysis']:
+                    st.write(f"Performance Percentile: {report['comparative_analysis']['performance_percentile']:.1f}%")
+                    st.write("**Benchmark Institutions:**")
+                    for bench in report['comparative_analysis']['benchmark_institutions']:
+                        st.write(f"• {bench['institution_name']}: {bench['performance_score']:.2f} - {bench['approval_recommendation']}")
+    
+    with col2:
+        st.subheader("Quick Institutional Insights")
+        
+        # Top performers
+        top_performers = df[df['year'] == 2023].nlargest(5, 'performance_score')[
+            ['institution_name', 'performance_score', 'approval_recommendation']
+        ]
+        
+        st.write("**🏆 Top Performing Institutions**")
+        for _, inst in top_performers.iterrows():
+            st.write(f"• {inst['institution_name']} ({inst['performance_score']:.2f})")
+        
+        # High risk institutions
+        high_risk = df[
+            (df['year'] == 2023) & 
+            (df['risk_level'].isin(['High Risk', 'Critical Risk']))
+        ].head(5)
+        
+        if not high_risk.empty:
+            st.write("**🚨 High Risk Institutions**")
+            for _, inst in high_risk.iterrows():
+                st.write(f"• {inst['institution_name']} - {inst['risk_level']}")
+
+def create_approval_workflow(analyzer):
+    st.header("🔄 AI-Enhanced Approval Workflow")
+    
+    st.info("Streamlined approval process with AI-powered decision support")
+    
+    # Workflow steps with AI integration
+    workflow_steps = [
+        {
+            "step": 1,
+            "title": "Document Submission & AI Verification",
+            "description": "Institutions submit documents through portal, AI verifies completeness",
+            "ai_features": ["Document classification", "Completeness check", "Sufficiency scoring"],
+            "output": "Document Sufficiency Report"
+        },
+        {
+            "step": 2,
+            "title": "Historical Data Analysis",
+            "description": "AI analyzes 5+ years of institutional performance data",
+            "ai_features": ["Trend analysis", "Performance scoring", "Risk assessment"],
+            "output": "Performance Analytics Report"
+        },
+        {
+            "step": 3,
+            "title": "Comparative Benchmarking",
+            "description": "AI compares institution with similar peers and standards",
+            "ai_features": ["Peer comparison", "Benchmark analysis", "Percentile ranking"],
+            "output": "Comparative Analysis Report"
+        },
+        {
+            "step": 4,
+            "title": "AI Recommendation Generation",
+            "description": "AI generates approval recommendations with justifications",
+            "ai_features": ["Decision support", "Risk mitigation", "Improvement suggestions"],
+            "output": "AI Recommendation Report"
+        },
+        {
+            "step": 5,
+            "title": "Expert Committee Review",
+            "description": "UGC/AICTE committee reviews AI recommendations and makes final decision",
+            "ai_features": ["Decision tracking", "Approval workflow", "Monitoring setup"],
+            "output": "Final Approval Decision"
+        }
+    ]
+    
+    for step in workflow_steps:
+        with st.expander(f"Step {step['step']}: {step['title']}"):
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.write(f"**Description:** {step['description']}")
+                st.write(f"**Output:** {step['output']}")
+            with col2:
+                st.write("**AI Features:**")
+                for feature in step['ai_features']:
+                    st.write(f"• {feature}")
 
 def main():
     st.markdown("""
     <style>
     .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .risk-high { color: #dc3545; font-weight: bold; }
-    .risk-medium { color: #ffc107; font-weight: bold; }
-    .risk-low { color: #28a745; font-weight: bold; }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('<h1 class="main-header">🚀 AI-Powered UGC/AICTE Institutional Analytics</h1>', unsafe_allow_html=True)
-    
-    # Initialize analytics engine
-    try:
-        analytics = AdvancedUGC_AICTE_Analytics()
-        df = analytics.sample_data
-        
-        # Train AI models
-        model, scaler, features = analytics.train_ai_models(df)
-        
-        st.success("✅ AI Analytics Platform Successfully Initialized!")
-    except Exception as e:
-        st.error(f"Error initializing platform: {e}")
-        st.stop()
-    
-    # Sidebar
-    st.sidebar.title("🤖 AI Navigation Panel")
-    app_mode = st.sidebar.selectbox("Choose AI Module", 
-        ["📋 Document Compliance", "🏢 Institutional Dashboard", "💡 AI Recommendation Engine", 
-         "🔮 Predictive Analytics"])
-    
-    if app_mode == "📋 Document Compliance":
-        create_document_compliance_module(analytics)
-    
-    elif app_mode == "🏢 Institutional Dashboard":
-        create_enhanced_dashboard(df)
-    
-    elif app_mode == "💡 AI Recommendation Engine":
-        create_recommendation_engine(df, analytics)
-    
-    elif app_mode == "🔮 Predictive Analytics":
-        create_predictive_analytics(analytics)
-
-if __name__ == "__main__":
-    main()
+        font
