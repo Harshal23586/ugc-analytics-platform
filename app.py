@@ -35,75 +35,75 @@ class InstitutionalAIAnalyzer:
         self.create_dummy_institution_users()
 
     def init_database(self):
-    """Initialize SQLite database for storing institutional data"""
-    self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
-    self.conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
-    cursor = self.conn.cursor()
+        """Initialize SQLite database for storing institutional data"""
+        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
+        cursor = self.conn.cursor()
     
     def create_dummy_institution_users(self):
-    """Create dummy institution users for testing"""
-    dummy_users = [
-        {
-            'institution_id': 'INST_0001',
-            'username': 'inst001_admin',
-            'password': 'password123',
-            'contact_person': 'Dr. Rajesh Kumar',
-            'email': 'rajesh.kumar@university001.edu.in',
-            'phone': '+91-9876543210'
-        },
-        {
-            'institution_id': 'INST_0050',
-            'username': 'inst050_registrar',
-            'password': 'testpass456',
-            'contact_person': 'Ms. Priya Sharma',
-            'email': 'priya.sharma@college050.edu.in',
-            'phone': '+91-8765432109'
-        },
-        {
-            'institution_id': 'INST_0100',
-            'username': 'inst100_director',
-            'password': 'demo789',
-            'contact_person': 'Prof. Amit Patel',
-            'email': 'amit.patel@university100.edu.in',
-            'phone': '+91-7654321098'
-        },
-        {
-            'institution_id': 'INST_0150',
-            'username': 'inst150_officer',
-            'password': 'admin2024',
-            'contact_person': 'Dr. Sunita Reddy',
-            'email': 'sunita.reddy@college150.edu.in',
-            'phone': '+91-6543210987'
-        },
-        {
-            'institution_id': 'INST_0200',
-            'username': 'inst200_manager',
-            'password': 'securepass',
-            'contact_person': 'Mr. Vikram Singh',
-            'email': 'vikram.singh@university200.edu.in',
-            'phone': '+91-5432109876'
-        }
-    ]
+        """Create dummy institution users for testing"""
+        dummy_users = [
+            {
+                'institution_id': 'INST_0001',
+                'username': 'inst001_admin',
+                'password': 'password123',
+                'contact_person': 'Dr. Rajesh Kumar',
+                'email': 'rajesh.kumar@university001.edu.in',
+                'phone': '+91-9876543210'
+            },
+            {
+                'institution_id': 'INST_0050',
+                'username': 'inst050_registrar',
+                'password': 'testpass456',
+                'contact_person': 'Ms. Priya Sharma',
+                'email': 'priya.sharma@college050.edu.in',
+                'phone': '+91-8765432109'
+            },
+            {
+                'institution_id': 'INST_0100',
+                'username': 'inst100_director',
+                'password': 'demo789',
+                'contact_person': 'Prof. Amit Patel',
+                'email': 'amit.patel@university100.edu.in',
+                'phone': '+91-7654321098'
+            },
+            {
+                'institution_id': 'INST_0150',
+                'username': 'inst150_officer',
+                'password': 'admin2024',
+                'contact_person': 'Dr. Sunita Reddy',
+                'email': 'sunita.reddy@college150.edu.in',
+                'phone': '+91-6543210987'
+            },
+            {
+                'institution_id': 'INST_0200',
+                'username': 'inst200_manager',
+                'password': 'securepass',
+                'contact_person': 'Mr. Vikram Singh',
+                'email': 'vikram.singh@university200.edu.in',
+                'phone': '+91-5432109876'
+            }
+        ]
     
-    for user_data in dummy_users:
-        try:
-            # Check if user already exists
-            cursor = self.conn.cursor()
-            cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
-            existing_user = cursor.fetchone()
+        for user_data in dummy_users:
+            try:
+                # Check if user already exists
+                cursor = self.conn.cursor()
+                cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
+                existing_user = cursor.fetchone()
             
-            if not existing_user:
-                self.create_institution_user(
-                    user_data['institution_id'],
-                    user_data['username'],
-                    user_data['password'],
-                    user_data['contact_person'],
-                    user_data['email'],
-                    user_data['phone']
-                )
-                print(f"Created user: {user_data['username']}")
-        except Exception as e:
-            print(f"Error creating user {user_data['username']}: {e}")
+                if not existing_user:
+                    self.create_institution_user(
+                        user_data['institution_id'],
+                        user_data['username'],
+                        user_data['password'],
+                        user_data['contact_person'],
+                        user_data['email'],
+                        user_data['phone']
+                    )
+                    print(f"Created user: {user_data['username']}")
+            except Exception as e:
+                print(f"Error creating user {user_data['username']}: {e}")
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
