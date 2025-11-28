@@ -40,7 +40,7 @@ if 'session_initialized' not in st.session_state:
     st.session_state.rag_analysis = None
     st.session_state.selected_institution = None
 
-class SimpleDocument:
+class RAGDocument:
     def __init__(self, page_content: str, metadata: dict = None):
         self.init_database()
         self.historical_data = self.load_or_generate_data()
@@ -114,7 +114,7 @@ class SimpleVectorStore:
         
         for idx in top_indices:
             if similarities[idx] > 0:  # Only include positive similarities
-                doc = SimpleDocument(
+                doc = RAGDocument(
                     page_content=self.documents[idx],
                     metadata={"similarity_score": float(similarities[idx])}
                 )
@@ -151,7 +151,7 @@ class RAGDataExtractor:
             self.vector_store = None
             self.documents = []
 
-    def build_vector_store(self, documents: List[SimpleDocument]):
+    def build_vector_store(self, documents: List[RAGDocument]):
         """Build simple vector store from documents"""
         if not documents or self.embedding_model is None:
             return None
@@ -273,7 +273,7 @@ class RAGDataExtractor:
                 else:
                     data['governance_metrics'][key] = match.group(1)
     
-    def build_vector_store(self, documents: List[SimpleDocument]):
+    def build_vector_store(self, documents: List[RAGDocument]):
         """Build FAISS vector store from documents"""
         texts = [doc.page_content for doc in documents]
         if not texts:
@@ -319,7 +319,7 @@ class RAGDataExtractor:
                 all_text += cleaned_text + "\n\n"
             
                 # Create document for vector store
-                doc = SimpleDocument(
+                doc = RAGDocument(
                     page_content=cleaned_text,
                     metadata={"source": file.name, "type": "institutional_data"}
                 )
