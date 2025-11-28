@@ -32,6 +32,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 import re
 from typing import List
 
+# Initialize session state at module level
+if 'session_initialized' not in st.session_state:
+    st.session_state.session_initialized = True
+    st.session_state.institution_user = None
+    st.session_state.user_role = None
+    st.session_state.rag_analysis = None
+    st.session_state.selected_institution = None
+
 class SimpleDocument:
     def __init__(self, page_content: str, metadata: dict = None):
         self.init_database()
@@ -786,6 +794,9 @@ class InstitutionalAIAnalyzer:
 
     def authenticate_institution_user(self, username: str, password: str) -> Dict:
         """Authenticate institution user"""
+        if not username or not password:
+            return None
+        
         cursor = self.conn.cursor()
         cursor.execute('''
             SELECT iu.*, i.institution_name 
@@ -796,19 +807,20 @@ class InstitutionalAIAnalyzer:
     
         user = cursor.fetchone()
         if user:
-            # Convert tuple to dictionary by getting column names
+            # Convert to dictionary safely
             columns = [description[0] for description in cursor.description]
             user_dict = dict(zip(columns, user))
         
-            # In a real application, use proper password hashing
-            if user_dict['password_hash'] == self.hash_password(password):
+            # Check if password_hash exists and matches
+            password_hash = user_dict.get('password_hash')
+            if password_hash and password_hash == self.hash_password(password):
                 return {
-                    'institution_id': user_dict['institution_id'],
-                    'institution_name': user_dict['institution_name'],
-                    'username': user_dict['username'],
-                    'role': user_dict['role'],
-                    'contact_person': user_dict['contact_person'],
-                    'email': user_dict['email']
+                    'institution_id': user_dict.get('institution_id'),
+                    'institution_name': user_dict.get('institution_name'),
+                    'username': user_dict.get('username'),
+                    'role': user_dict.get('role', 'Institution'),
+                    'contact_person': user_dict.get('contact_person', ''),
+                    'email': user_dict.get('email', '')
                 }
         return None
     
@@ -1327,19 +1339,23 @@ def create_institution_login(analyzer):
                     st.error("Username already exists. Please choose a different username.")
 
 def create_institution_dashboard(analyzer, user):
-    st.header(f"🏛️ Institution Dashboard - {user['institution_name']}")
+    if not user:
+        st.error("No user data available")
+        return
+        
+    st.header(f"🏛️ Institution Dashboard - {user.get('institution_name', 'Unknown')}")
     
-    # Display institution overview
+    # Display institution overview with safe access
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Institution ID", user['institution_id'])
+        st.metric("Institution ID", user.get('institution_id', 'N/A'))
     with col2:
-        st.metric("Contact Person", user['contact_person'])
+        st.metric("Contact Person", user.get('contact_person', 'N/A'))
     with col3:
-        st.metric("Email", user['email'])
+        st.metric("Email", user.get('email', 'N/A'))
     with col4:
-        st.metric("Role", user['role'])
+        st.metric("Role", user.get('role', 'N/A'))
     
     # Navigation for institution users
     institution_tabs = st.tabs([
@@ -2435,210 +2451,152 @@ def create_rag_data_management(analyzer):
             st.success("RAG system reset successfully!")
 
 def main():
+    # Safe session state initialization
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
     if 'user_role' not in st.session_state:
         st.session_state.user_role = None
-    if 'rag_analysis' not in st.session_state:
-        st.session_state.rag_analysis = None
-    if 'selected_institution' not in st.session_state:
-        st.session_state.selected_institution = None
-    st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
-        font-weight: bold;
-    }
-    .sub-header {
-        font-size: 1.8rem;
-        color: #2c3e50;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        font-weight: 600;
-    }
-    .info-box {
-        background-color: #e8f4fd;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .warning-box {
-        background-color: #fff3cd;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #ffc107;
-        margin-bottom: 1rem;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border: 1px solid #dee2e6;
-    }
-    </style>
-    """, unsafe_allow_html=True)
     
-    # Main header
-    st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
-    st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
-    
-    # Initialize analytics engine
+    # Initialize analytics engine with error handling
     try:
         analyzer = InstitutionalAIAnalyzer()
-        
-        # Check if institution user is logged in
-        if 'institution_user' in st.session_state:
-            create_institution_dashboard(analyzer, st.session_state.institution_user)
-            if st.sidebar.button("🚪 Logout"):
-                del st.session_state.institution_user
-                st.rerun()
-            return
-        
-        # System overview
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.markdown("""
-            <div class="info-box">
-            <h4>🚀 System Overview</h4>
-            <p>This AI-powered platform automates the analysis of institutional historical data, performance metrics, 
-            and document compliance for UGC and AICTE approval processes.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("""
-            <div class="warning-box">
-            <h4>🔒 Secure Access</h4>
-            <p>Authorized UGC/AICTE personnel and registered institutions only. All activities are logged and monitored.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.success("✅ AI Analytics System Successfully Initialized!")
-        
-        # Display quick stats
-        st.subheader("📈 System Quick Stats")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            total_institutions = len(analyzer.historical_data['institution_id'].unique())
-            st.metric("Total Institutions", total_institutions)
-        
-        with col2:
-            years_data = len(analyzer.historical_data['year'].unique())
-            st.metric("Years of Data", years_data)
-        
-        with col3:
-            current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
-            if len(current_year_data) > 0:
-                avg_performance = current_year_data['performance_score'].mean()
-                st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
-            else:
-                st.metric("Avg Performance Score", "N/A")
-        
-        with col4:
-            if len(current_year_data) > 0:
-                approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
-                st.metric("Approval Ready", approval_ready)
-            else:
-                st.metric("Approval Ready", "N/A")
-            
     except Exception as e:
         st.error(f"❌ System initialization error: {str(e)}")
         st.stop()
     
-    # Navigation
-        # Navigation - SINGLE sidebar section for all roles
-        st.sidebar.title("🧭 Navigation Panel")
+    # Check if institution user is logged in
+    if st.session_state.institution_user is not None:
+        create_institution_dashboard(analyzer, st.session_state.institution_user)
+        if st.sidebar.button("🚪 Logout"):
+            st.session_state.institution_user = None
+            st.session_state.user_role = None
+            st.rerun()
+        return
     
-        # Authentication Section
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔐 Authentication")
+    # Main header and system overview
+    st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
+    st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
-        # Role selection - only show if not logged in as institution
-        if st.session_state.institution_user is None:
-            user_role = st.sidebar.selectbox(
-                "Select Your Role",
-                ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
-            )
+    # System overview
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("""
+        <div class="info-box">
+        <h4>🚀 System Overview</h4>
+        <p>This AI-powered platform automates the analysis of institutional historical data, performance metrics, 
+        and document compliance for UGC and AICTE approval processes.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="warning-box">
+        <h4>🔒 Secure Access</h4>
+        <p>Authorized UGC/AICTE personnel and registered institutions only. All activities are logged and monitored.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.success("✅ AI Analytics System Successfully Initialized!")
+    
+    # Display quick stats
+    st.subheader("📈 System Quick Stats")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_institutions = len(analyzer.historical_data['institution_id'].unique())
+        st.metric("Total Institutions", total_institutions)
+    
+    with col2:
+        years_data = len(analyzer.historical_data['year'].unique())
+        st.metric("Years of Data", years_data)
+    
+    with col3:
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        if len(current_year_data) > 0:
+            avg_performance = current_year_data['performance_score'].mean()
+            st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
         else:
-            user_role = "Institution"  # Already logged in as institution
+            st.metric("Avg Performance Score", "N/A")
     
-        # Handle Institution role
-        if user_role == "Institution":
-            if st.session_state.institution_user is None:
-                create_institution_login(analyzer)
-                return
-            else:
-                # Institution is logged in, show their dashboard
-                create_institution_dashboard(analyzer, st.session_state.institution_user)
-                if st.sidebar.button("🚪 Logout"):
-                    del st.session_state.institution_user
-                    st.session_state.user_role = None
-                    st.rerun()
-                return
+    with col4:
+        if len(current_year_data) > 0:
+            approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
+            st.metric("Approval Ready", approval_ready)
+        else:
+            st.metric("Approval Ready", "N/A")
     
-        # For other roles, show the AI modules - ONLY ONCE
-        st.sidebar.markdown("### AI Modules")
+    # SINGLE sidebar navigation section
+    st.sidebar.title("🧭 Navigation Panel")
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔐 Authentication")
     
-        app_mode = st.sidebar.selectbox(
-            "Select Analysis Module",
-            [
-                "📊 Performance Dashboard",
-                "📋 Document Analysis", 
-                "🤖 AI Reports",
-                "🔍 RAG Data Management",
-                "💾 Data Management",
-                "🔄 Approval Workflow",
-                "⚙️ System Settings"
-            ]
-        )
+    user_role = st.sidebar.selectbox(
+        "Select Your Role",
+        ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+    )
     
-        # Route to selected module
-        if app_mode == "📊 Performance Dashboard":
-            create_performance_dashboard(analyzer)
+    if user_role == "Institution":
+        create_institution_login(analyzer)
+        return
     
-        elif app_mode == "📋 Document Analysis":
-            create_document_analysis_module(analyzer)
+    # For other roles, show the AI modules
+    st.sidebar.markdown("### AI Modules")
     
-        elif app_mode == "🤖 AI Reports":
-            create_ai_analysis_reports(analyzer)
+    app_mode = st.sidebar.selectbox(
+        "Select Analysis Module",
+        [
+            "📊 Performance Dashboard",
+            "📋 Document Analysis", 
+            "🤖 AI Reports",
+            "🔍 RAG Data Management",
+            "💾 Data Management",
+            "🔄 Approval Workflow",
+            "⚙️ System Settings"
+        ]
+    )
     
-        elif app_mode == "🔍 RAG Data Management":
-            create_rag_data_management(analyzer)
+    # Route to selected module
+    if app_mode == "📊 Performance Dashboard":
+        create_performance_dashboard(analyzer)
     
-        elif app_mode == "💾 Data Management":
-            create_data_management_module(analyzer)
+    elif app_mode == "📋 Document Analysis":
+        create_document_analysis_module(analyzer)
     
-        elif app_mode == "🔄 Approval Workflow":
-            create_approval_workflow(analyzer)
+    elif app_mode == "🤖 AI Reports":
+        create_ai_analysis_reports(analyzer)
     
-        elif app_mode == "⚙️ System Settings":
-            st.header("⚙️ System Settings & Configuration")
-            st.info("System administration and configuration panel")
+    elif app_mode == "🔍 RAG Data Management":
+        create_rag_data_management(analyzer)
+    
+    elif app_mode == "💾 Data Management":
+        create_data_management_module(analyzer)
+    
+    elif app_mode == "🔄 Approval Workflow":
+        create_approval_workflow(analyzer)
+    
+    elif app_mode == "⚙️ System Settings":
+        st.header("⚙️ System Settings & Configuration")
+        st.info("System administration and configuration panel")
         
-            col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
         
-            with col1:
-                st.subheader("Performance Metrics Configuration")
-                st.json(analyzer.performance_metrics)
+        with col1:
+            st.subheader("Performance Metrics Configuration")
+            st.json(analyzer.performance_metrics)
         
-            with col2:
-                st.subheader("Document Requirements")
-                st.json(analyzer.document_requirements)
+        with col2:
+            st.subheader("Document Requirements")
+            st.json(analyzer.document_requirements)
         
-            st.subheader("System Information")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Database Records", len(analyzer.historical_data))
-            with col2:
-                st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
-            with col3:
-                st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
+        st.subheader("System Information")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Database Records", len(analyzer.historical_data))
+        with col2:
+            st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
+        with col3:
+            st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
     
     # Footer
     st.markdown("---")
@@ -2648,6 +2606,5 @@ def main():
     <p>Version 2.0 | For authorized use only | Data last updated: {}</p>
     </div>
     """.format(datetime.now().strftime("%Y-%m-%d %H:%M")), unsafe_allow_html=True)
-
 if __name__ == "__main__":
     main()
