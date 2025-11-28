@@ -93,6 +93,39 @@ class InstitutionalAIAnalyzer:
             )
         ''')
         
+        # Create institution submissions table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS institution_submissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                institution_id TEXT,
+                submission_type TEXT,
+                submission_data TEXT,
+                status TEXT DEFAULT 'Under Review',
+                submitted_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                reviewed_by TEXT,
+                review_date TIMESTAMP,
+                review_comments TEXT,
+                FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+            )
+        ''')
+        
+        # Create institution users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS institution_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                institution_id TEXT,
+                username TEXT UNIQUE,
+                password_hash TEXT,
+                contact_person TEXT,
+                email TEXT,
+                phone TEXT,
+                role TEXT DEFAULT 'Institution',
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+            )
+        ''')
+        
         self.conn.commit()
     
     def load_or_generate_data(self):
@@ -208,6 +241,69 @@ class InstitutionalAIAnalyzer:
                 ]
             }
         }
+
+    def authenticate_institution_user(self, username: str, password: str) -> Dict:
+        """Authenticate institution user"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT iu.*, i.institution_name 
+            FROM institution_users iu 
+            JOIN institutions i ON iu.institution_id = i.institution_id 
+            WHERE iu.username = ? AND iu.is_active = 1
+        ''', (username,))
+        
+        user = cursor.fetchone()
+        if user:
+            # In a real application, use proper password hashing
+            if user['password_hash'] == self.hash_password(password):
+                return {
+                    'institution_id': user['institution_id'],
+                    'institution_name': user['institution_name'],
+                    'username': user['username'],
+                    'role': user['role'],
+                    'contact_person': user['contact_person'],
+                    'email': user['email']
+                }
+        return None
+
+    def hash_password(self, password: str) -> str:
+        """Simple password hashing (use proper hashing in production)"""
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def create_institution_user(self, institution_id: str, username: str, password: str, 
+                              contact_person: str, email: str, phone: str):
+        """Create new institution user account"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute('''
+                INSERT INTO institution_users 
+                (institution_id, username, password_hash, contact_person, email, phone)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (institution_id, username, self.hash_password(password), 
+                  contact_person, email, phone))
+            self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def save_institution_submission(self, institution_id: str, submission_type: str, 
+                                  submission_data: Dict):
+        """Save institution submission data"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            INSERT INTO institution_submissions 
+            (institution_id, submission_type, submission_data)
+            VALUES (?, ?, ?)
+        ''', (institution_id, submission_type, json.dumps(submission_data)))
+        self.conn.commit()
+
+    def get_institution_submissions(self, institution_id: str) -> pd.DataFrame:
+        """Get submissions for a specific institution"""
+        return pd.read_sql('''
+            SELECT * FROM institution_submissions 
+            WHERE institution_id = ? 
+            ORDER BY submitted_date DESC
+        ''', self.conn, params=(institution_id,))
     
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
         """Generate comprehensive historical data for institutions"""
@@ -625,6 +721,367 @@ class InstitutionalAIAnalyzer:
         
         return recommendations
 
+# Institution-specific modules
+def create_institution_login(analyzer):
+    st.header("🏛️ Institution Portal Login")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Existing Institution Users")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            user = analyzer.authenticate_institution_user(username, password)
+            if user:
+                st.session_state.institution_user = user
+                st.session_state.user_role = "Institution"
+                st.success(f"Welcome, {user['contact_person']} from {user['institution_name']}!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+    
+    with col2:
+        st.subheader("New Institution Registration")
+        
+        # Get available institutions
+        available_institutions = analyzer.historical_data[
+            analyzer.historical_data['year'] == 2023
+        ][['institution_id', 'institution_name']].drop_duplicates()
+        
+        selected_institution = st.selectbox(
+            "Select Your Institution",
+            available_institutions['institution_id'].tolist(),
+            format_func=lambda x: available_institutions[
+                available_institutions['institution_id'] == x
+            ]['institution_name'].iloc[0]
+        )
+        
+        new_username = st.text_input("Choose Username")
+        new_password = st.text_input("Choose Password", type="password")
+        confirm_password = st.text_input("Confirm Password", type="password")
+        contact_person = st.text_input("Contact Person Name")
+        email = st.text_input("Email Address")
+        phone = st.text_input("Phone Number")
+        
+        if st.button("Register Institution Account"):
+            if new_password != confirm_password:
+                st.error("Passwords do not match!")
+            elif not all([new_username, new_password, contact_person, email]):
+                st.error("Please fill all required fields!")
+            else:
+                success = analyzer.create_institution_user(
+                    selected_institution, new_username, new_password,
+                    contact_person, email, phone
+                )
+                if success:
+                    st.success("Institution account created successfully! You can now login.")
+                else:
+                    st.error("Username already exists. Please choose a different username.")
+
+def create_institution_dashboard(analyzer, user):
+    st.header(f"🏛️ Institution Dashboard - {user['institution_name']}")
+    
+    # Display institution overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Institution ID", user['institution_id'])
+    with col2:
+        st.metric("Contact Person", user['contact_person'])
+    with col3:
+        st.metric("Email", user['email'])
+    with col4:
+        st.metric("Role", user['role'])
+    
+    # Navigation for institution users
+    institution_tabs = st.tabs([
+        "📤 Document Upload", 
+        "📝 Data Submission", 
+        "📊 My Submissions",
+        "📋 Requirements Guide"
+    ])
+    
+    with institution_tabs[0]:
+        create_institution_document_upload(analyzer, user)
+    
+    with institution_tabs[1]:
+        create_institution_data_submission(analyzer, user)
+    
+    with institution_tabs[2]:
+        create_institution_submissions_view(analyzer, user)
+    
+    with institution_tabs[3]:
+        create_institution_requirements_guide(analyzer)
+
+def create_institution_document_upload(analyzer, user):
+    st.subheader("📤 Document Upload Portal")
+    
+    st.info("Upload required documents for approval processes")
+    
+    approval_type = st.selectbox(
+        "Select Approval Type",
+        ["new_approval", "renewal_approval", "expansion_approval"],
+        format_func=lambda x: x.replace('_', ' ').title(),
+        key="inst_approval_type"
+    )
+    
+    uploaded_files = st.file_uploader(
+        "Upload Institutional Documents",
+        type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
+        accept_multiple_files=True,
+        help="Upload all required documents for your application"
+    )
+    
+    if uploaded_files:
+        # Document type mapping
+        st.subheader("📝 Document Type Assignment")
+        document_types = []
+        for i, file in enumerate(uploaded_files):
+            doc_type = st.selectbox(
+                f"Document type for: {file.name}",
+                ["affidavit_legal_status", "land_documents", "building_plan_approval", 
+                 "financial_solvency_certificate", "faculty_recruitment_plan", 
+                 "academic_curriculum", "annual_reports", "research_publications",
+                 "placement_records", "other"],
+                key=f"inst_doc_type_{i}"
+            )
+            document_types.append(doc_type)
+        
+        if st.button("💾 Upload Documents"):
+            # Save documents
+            analyzer.save_uploaded_documents(user['institution_id'], uploaded_files, document_types)
+            st.success("✅ Documents uploaded successfully!")
+            
+            # Analyze document sufficiency
+            file_names = [file.name for file in uploaded_files]
+            analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
+            
+            # Display results
+            st.subheader("📊 Upload Analysis")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric(
+                    "Mandatory Documents", 
+                    f"{analysis_result['mandatory_sufficiency']:.1f}%",
+                    delta=f"{analysis_result['mandatory_sufficiency'] - 100:.1f}%" if analysis_result['mandatory_sufficiency'] < 100 else None,
+                    delta_color="inverse"
+                )
+            
+            with col2:
+                st.metric(
+                    "Overall Sufficiency", 
+                    f"{analysis_result['overall_sufficiency']:.1f}%"
+                )
+            
+            # Show missing documents
+            if analysis_result['missing_mandatory']:
+                st.error("**❌ Missing Mandatory Documents:**")
+                for doc in analysis_result['missing_mandatory']:
+                    st.write(f"• {doc.replace('_', ' ').title()}")
+            
+            # Recommendations
+            st.info("**💡 Next Steps:**")
+            for recommendation in analysis_result['recommendations']:
+                st.write(f"• {recommendation}")
+
+def create_institution_data_submission(analyzer, user):
+    st.subheader("📝 Data Submission Form")
+    
+    st.info("Submit institutional data and performance metrics through this form")
+    
+    with st.form("institution_data_submission"):
+        st.write("### Academic Performance Data")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            naac_grade = st.selectbox(
+                "NAAC Grade",
+                ["A++", "A+", "A", "B++", "B+", "B", "C"]
+            )
+            student_faculty_ratio = st.number_input(
+                "Student-Faculty Ratio",
+                min_value=5.0,
+                max_value=50.0,
+                value=20.0,
+                step=0.1
+            )
+            phd_faculty_ratio = st.number_input(
+                "PhD Faculty Ratio (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=60.0,
+                step=1.0
+            ) / 100
+        
+        with col2:
+            nirf_ranking = st.number_input(
+                "NIRF Ranking (if applicable)",
+                min_value=1,
+                max_value=200,
+                value=None,
+                placeholder="Leave blank if not ranked"
+            )
+            placement_rate = st.number_input(
+                "Placement Rate (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=75.0,
+                step=1.0
+            )
+        
+        st.write("### Research & Infrastructure")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            research_publications = st.number_input(
+                "Research Publications (Last Year)",
+                min_value=0,
+                value=50
+            )
+            research_grants = st.number_input(
+                "Research Grants Amount (₹)",
+                min_value=0,
+                value=1000000,
+                step=100000
+            )
+        
+        with col2:
+            digital_infrastructure_score = st.slider(
+                "Digital Infrastructure Score",
+                min_value=1,
+                max_value=10,
+                value=7
+            )
+            library_volumes = st.number_input(
+                "Library Volumes",
+                min_value=0,
+                value=20000
+            )
+        
+        st.write("### Governance & Social Impact")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            financial_stability_score = st.slider(
+                "Financial Stability Score",
+                min_value=1,
+                max_value=10,
+                value=8
+            )
+            community_projects = st.number_input(
+                "Community Projects (Last Year)",
+                min_value=0,
+                value=10
+            )
+        
+        with col2:
+            compliance_score = st.slider(
+                "Compliance Score",
+                min_value=1,
+                max_value=10,
+                value=8
+            )
+            administrative_efficiency = st.slider(
+                "Administrative Efficiency",
+                min_value=1,
+                max_value=10,
+                value=7
+            )
+        
+        submission_notes = st.text_area(
+            "Additional Notes / Comments",
+            placeholder="Add any additional information or context for your submission..."
+        )
+        
+        submitted = st.form_submit_button("📤 Submit Data")
+        
+        if submitted:
+            submission_data = {
+                "academic_data": {
+                    "naac_grade": naac_grade,
+                    "nirf_ranking": nirf_ranking,
+                    "student_faculty_ratio": student_faculty_ratio,
+                    "phd_faculty_ratio": phd_faculty_ratio,
+                    "placement_rate": placement_rate
+                },
+                "research_data": {
+                    "research_publications": research_publications,
+                    "research_grants": research_grants,
+                    "digital_infrastructure_score": digital_infrastructure_score,
+                    "library_volumes": library_volumes
+                },
+                "governance_data": {
+                    "financial_stability_score": financial_stability_score,
+                    "compliance_score": compliance_score,
+                    "administrative_efficiency": administrative_efficiency,
+                    "community_projects": community_projects
+                },
+                "submission_notes": submission_notes,
+                "submission_date": datetime.now().isoformat()
+            }
+            
+            analyzer.save_institution_submission(
+                user['institution_id'],
+                "annual_performance_data",
+                submission_data
+            )
+            
+            st.success("✅ Data submitted successfully! Your submission is under review.")
+            st.balloons()
+
+def create_institution_submissions_view(analyzer, user):
+    st.subheader("📊 My Submissions & Status")
+    
+    submissions = analyzer.get_institution_submissions(user['institution_id'])
+    
+    if len(submissions) > 0:
+        for _, submission in submissions.iterrows():
+            with st.expander(f"{submission['submission_type']} - {submission['submitted_date']}"):
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.write(f"**Status:** {submission['status']}")
+                with col2:
+                    st.write(f"**Submitted:** {submission['submitted_date']}")
+                with col3:
+                    if submission['reviewed_by']:
+                        st.write(f"**Reviewed by:** {submission['reviewed_by']}")
+                
+                if submission['review_comments']:
+                    st.info(f"**Review Comments:** {submission['review_comments']}")
+                
+                # Display submission data
+                try:
+                    submission_data = json.loads(submission['submission_data'])
+                    st.json(submission_data)
+                except:
+                    st.write("Submission data format not available")
+    else:
+        st.info("No submissions found. Use the Data Submission tab to submit your institutional data.")
+
+def create_institution_requirements_guide(analyzer):
+    st.subheader("📋 Approval Requirements Guide")
+    
+    requirements = analyzer.document_requirements
+    
+    for approval_type, docs in requirements.items():
+        with st.expander(f"{approval_type.replace('_', ' ').title()} Requirements"):
+            st.write("**Mandatory Documents:**")
+            for doc in docs['mandatory']:
+                st.write(f"• {doc.replace('_', ' ').title()}")
+            
+            st.write("**Supporting Documents:**")
+            for doc in docs['supporting']:
+                st.write(f"• {doc.replace('_', ' ').title()}")
+
+# Existing analytical modules (unchanged)
 def create_performance_dashboard(analyzer):
     st.header("📊 Institutional Performance Analytics Dashboard")
     
@@ -1274,29 +1731,38 @@ def main():
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
-    # System overview
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown("""
-        <div class="info-box">
-        <h4>🚀 System Overview</h4>
-        <p>This AI-powered platform automates the analysis of institutional historical data, performance metrics, 
-        and document compliance for UGC and AICTE approval processes.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="warning-box">
-        <h4>🔒 Secure Access</h4>
-        <p>Authorized UGC/AICTE personnel only. All activities are logged and monitored.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
     # Initialize analytics engine
     try:
         analyzer = InstitutionalAIAnalyzer()
+        
+        # Check if institution user is logged in
+        if 'institution_user' in st.session_state:
+            create_institution_dashboard(analyzer, st.session_state.institution_user)
+            if st.sidebar.button("🚪 Logout"):
+                del st.session_state.institution_user
+                st.rerun()
+            return
+        
+        # System overview
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("""
+            <div class="info-box">
+            <h4>🚀 System Overview</h4>
+            <p>This AI-powered platform automates the analysis of institutional historical data, performance metrics, 
+            and document compliance for UGC and AICTE approval processes.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown("""
+            <div class="warning-box">
+            <h4>🔒 Secure Access</h4>
+            <p>Authorized UGC/AICTE personnel and registered institutions only. All activities are logged and monitored.</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
         st.success("✅ AI Analytics System Successfully Initialized!")
         
         # Display quick stats
@@ -1332,6 +1798,21 @@ def main():
     
     # Navigation
     st.sidebar.title("🧭 Navigation Panel")
+    
+    # Authentication Section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔐 Authentication")
+    
+    user_role = st.sidebar.selectbox(
+        "Select Your Role",
+        ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+    )
+    
+    if user_role == "Institution":
+        create_institution_login(analyzer)
+        return
+    
+    # For other roles, show the existing modules
     st.sidebar.markdown("### AI Modules")
     
     app_mode = st.sidebar.selectbox(
@@ -1344,14 +1825,6 @@ def main():
             "🔄 Approval Workflow",
             "⚙️ System Settings"
         ]
-    )
-    
-    # Authentication (simplified for demo)
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔐 Authentication")
-    user_role = st.sidebar.selectbox(
-        "User Role",
-        ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
     )
     
     # Route to selected module
