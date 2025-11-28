@@ -97,6 +97,12 @@ class InstitutionalAIAnalyzer:
             except:
                 # User already exists, skip
                 pass        
+    
+    def init_database(self):
+        """Initialize SQLite database for storing institutional data"""
+        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
+        cursor = self.conn.cursor()        
+        
         # Create institutions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institutions (
