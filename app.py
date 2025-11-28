@@ -12,11 +12,26 @@ warnings.filterwarnings('ignore')
 # Additional imports for enhanced functionality
 from datetime import datetime, timedelta
 import json
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import hashlib
 import sqlite3
 import io
 import base64
+import os
+import tempfile
+from pathlib import Path
+
+# RAG-specific imports
+import PyPDF2
+import docx
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.schema import Document
+import faiss
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
 
 # Page configuration
 st.set_page_config(
@@ -26,89 +41,207 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+class RAGDataExtractor:
+    def __init__(self):
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len
+        )
+        self.vector_store = None
+        self.documents = []
+        
+    def extract_text_from_file(self, file) -> str:
+        """Extract text from various file formats"""
+        text = ""
+        file_extension = file.name.split('.')[-1].lower()
+        
+        try:
+            if file_extension == 'pdf':
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
+                    
+            elif file_extension in ['doc', 'docx']:
+                doc = docx.Document(file)
+                for paragraph in doc.paragraphs:
+                    text += paragraph.text + "\n"
+                    
+            elif file_extension in ['txt']:
+                text = file.getvalue().decode('utf-8')
+                
+            elif file_extension in ['xlsx', 'xls']:
+                df = pd.read_excel(file)
+                text = df.to_string()
+                
+        except Exception as e:
+            st.error(f"Error extracting text from {file.name}: {str(e)}")
+            
+        return text
+    
+    def preprocess_text(self, text: str) -> str:
+        """Clean and preprocess extracted text"""
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        # Remove special characters but keep relevant ones
+        text = re.sub(r'[^\w\s.,!?;:()\-]', '', text)
+        return text.strip()
+    
+    def extract_structured_data(self, text: str) -> Dict[str, Any]:
+        """Extract structured data from text using pattern matching"""
+        data = {
+            'academic_metrics': {},
+            'research_metrics': {},
+            'infrastructure_metrics': {},
+            'governance_metrics': {},
+            'student_metrics': {},
+            'financial_metrics': {}
+        }
+        
+        # Academic metrics patterns
+        academic_patterns = {
+            'naac_grade': r'NAAC\s*(?:grade|accreditation|score)[:\s]*([A+]+)',
+            'nirf_ranking': r'NIRF\s*(?:rank|ranking)[:\s]*(\d+)',
+            'student_faculty_ratio': r'(?:student|student-faculty)\s*(?:ratio|ratio:)[:\s]*(\d+(?:\.\d+)?)',
+            'phd_faculty_ratio': r'PhD\s*(?:faculty|faculty ratio)[:\s]*(\d+(?:\.\d+)?)%?',
+            'placement_rate': r'placement\s*(?:rate|percentage)[:\s]*(\d+(?:\.\d+)?)%?'
+        }
+        
+        # Research metrics patterns
+        research_patterns = {
+            'research_publications': r'research\s*(?:publications|papers)[:\s]*(\d+)',
+            'research_grants': r'research\s*(?:grants|funding)[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)',
+            'patents_filed': r'patents?\s*(?:filed|granted)[:\s]*(\d+)',
+            'industry_collaborations': r'industry\s*(?:collaborations|partnerships)[:\s]*(\d+)'
+        }
+        
+        # Extract academic metrics
+        for key, pattern in academic_patterns.items():
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data['academic_metrics'][key] = match.group(1)
+        
+        # Extract research metrics
+        for key, pattern in research_patterns.items():
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data['research_metrics'][key] = match.group(1)
+        
+        # Extract numbers with context
+        self.extract_contextual_data(text, data)
+        
+        return data
+    
+    def extract_contextual_data(self, text: str, data: Dict):
+        """Extract data based on contextual patterns"""
+        # Look for numbers near keywords
+        patterns = [
+            (r'library.*?(\d+(?:,\d+)*)\s*(?:volumes|books)', 'library_volumes'),
+            (r'campus.*?(\d+(?:\.\d+)?)\s*(?:acres|hectares)', 'campus_area'),
+            (r'financial.*?stability.*?(\d+(?:\.\d+)?)\s*(?:out of|/)', 'financial_stability_score'),
+            (r'digital.*?infrastructure.*?(\d+(?:\.\d+)?)\s*(?:out of|/)', 'digital_infrastructure_score'),
+            (r'community.*?projects.*?(\d+)', 'community_projects')
+        ]
+        
+        for pattern, key in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if 'infrastructure' in key:
+                    data['infrastructure_metrics'][key] = match.group(1)
+                elif 'financial' in key:
+                    data['financial_metrics'][key] = match.group(1)
+                else:
+                    data['governance_metrics'][key] = match.group(1)
+    
+    def build_vector_store(self, documents: List[Document]):
+        """Build FAISS vector store from documents"""
+        texts = [doc.page_content for doc in documents]
+        if not texts:
+            return None
+            
+        embeddings = self.embedding_model.encode(texts)
+        self.vector_store = FAISS.from_embeddings(
+            list(zip(texts, embeddings)),
+            self.embedding_model
+        )
+        self.documents = documents
+        
+    def query_documents(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
+        """Query documents using semantic search"""
+        if not self.vector_store:
+            return []
+            
+        query_embedding = self.embedding_model.encode([query])
+        results = self.vector_store.similarity_search_with_score(query, k=k)
+        return results
+    
+    def extract_comprehensive_data(self, uploaded_files: List) -> Dict[str, Any]:
+        """Extract comprehensive data from all uploaded files"""
+        all_text = ""
+        all_structured_data = {
+            'academic_metrics': {},
+            'research_metrics': {},
+            'infrastructure_metrics': {},
+            'governance_metrics': {},
+            'student_metrics': {},
+            'financial_metrics': {},
+            'raw_text': "",
+            'file_names': []
+        }
+        
+        documents = []
+        
+        for file in uploaded_files:
+            try:
+                # Extract text
+                text = self.extract_text_from_file(file)
+                cleaned_text = self.preprocess_text(text)
+                all_text += cleaned_text + "\n\n"
+                
+                # Create document for vector store
+                doc = Document(
+                    page_content=cleaned_text,
+                    metadata={"source": file.name, "type": "institutional_data"}
+                )
+                documents.append(doc)
+                
+                # Extract structured data
+                file_data = self.extract_structured_data(cleaned_text)
+                
+                # Merge data from all files
+                for category in file_data:
+                    if category in all_structured_data:
+                        all_structured_data[category].update(file_data[category])
+                
+                all_structured_data['file_names'].append(file.name)
+                
+            except Exception as e:
+                st.error(f"Error processing {file.name}: {str(e)}")
+                continue
+        
+        # Build vector store for semantic search
+        if documents:
+            self.build_vector_store(documents)
+        
+        all_structured_data['raw_text'] = all_text
+        
+        return all_structured_data
+
 class InstitutionalAIAnalyzer:
     def __init__(self):
         self.init_database()
         self.historical_data = self.load_or_generate_data()
         self.performance_metrics = self.define_performance_metrics()
         self.document_requirements = self.define_document_requirements()
+        self.rag_extractor = RAGDataExtractor()
         self.create_dummy_institution_users()
-
-    def init_database(self):
-        """Initialize SQLite database for storing institutional data"""
-        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row  # This makes rows behave like dictionaries
-        cursor = self.conn.cursor()
-    
-    def create_dummy_institution_users(self):
-        """Create dummy institution users for testing"""
-        dummy_users = [
-            {
-                'institution_id': 'INST_0001',
-                'username': 'inst001_admin',
-                'password': 'password123',
-                'contact_person': 'Dr. Rajesh Kumar',
-                'email': 'rajesh.kumar@university001.edu.in',
-                'phone': '+91-9876543210'
-            },
-            {
-                'institution_id': 'INST_0050',
-                'username': 'inst050_registrar',
-                'password': 'testpass456',
-                'contact_person': 'Ms. Priya Sharma',
-                'email': 'priya.sharma@college050.edu.in',
-                'phone': '+91-8765432109'
-            },
-            {
-                'institution_id': 'INST_0100',
-                'username': 'inst100_director',
-                'password': 'demo789',
-                'contact_person': 'Prof. Amit Patel',
-                'email': 'amit.patel@university100.edu.in',
-                'phone': '+91-7654321098'
-            },
-            {
-                'institution_id': 'INST_0150',
-                'username': 'inst150_officer',
-                'password': 'admin2024',
-                'contact_person': 'Dr. Sunita Reddy',
-                'email': 'sunita.reddy@college150.edu.in',
-                'phone': '+91-6543210987'
-            },
-            {
-                'institution_id': 'INST_0200',
-                'username': 'inst200_manager',
-                'password': 'securepass',
-                'contact_person': 'Mr. Vikram Singh',
-                'email': 'vikram.singh@university200.edu.in',
-                'phone': '+91-5432109876'
-            }
-        ]
-    
-        for user_data in dummy_users:
-            try:
-                # Check if user already exists
-                cursor = self.conn.cursor()
-                cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
-                existing_user = cursor.fetchone()
-            
-                if not existing_user:
-                    self.create_institution_user(
-                        user_data['institution_id'],
-                        user_data['username'],
-                        user_data['password'],
-                        user_data['contact_person'],
-                        user_data['email'],
-                        user_data['phone']
-                    )
-                    print(f"Created user: {user_data['username']}")
-            except Exception as e:
-                print(f"Error creating user {user_data['username']}: {e}")
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
         self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
-        cursor = self.conn.cursor()        
+        self.conn.row_factory = sqlite3.Row
+        cursor = self.conn.cursor()
         
         # Create institutions table
         cursor.execute('''
@@ -161,6 +294,21 @@ class InstitutionalAIAnalyzer:
                 file_path TEXT,
                 upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'Pending',
+                extracted_data TEXT,
+                FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+            )
+        ''')
+        
+        # Create RAG analysis table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS rag_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                institution_id TEXT,
+                analysis_type TEXT,
+                extracted_data TEXT,
+                ai_insights TEXT,
+                confidence_score REAL,
+                analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
             )
         ''')
@@ -199,6 +347,127 @@ class InstitutionalAIAnalyzer:
         ''')
         
         self.conn.commit()
+
+    def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
+        """Analyze uploaded documents using RAG and extract structured data"""
+        try:
+            # Extract data using RAG
+            extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
+            
+            # Save extracted data to database
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                INSERT INTO rag_analysis 
+                (institution_id, analysis_type, extracted_data, confidence_score)
+                VALUES (?, ?, ?, ?)
+            ''', (institution_id, 'document_analysis', json.dumps(extracted_data), 0.85))
+            
+            self.conn.commit()
+            
+            # Generate AI insights
+            ai_insights = self.generate_ai_insights(extracted_data)
+            
+            return {
+                'extracted_data': extracted_data,
+                'ai_insights': ai_insights,
+                'confidence_score': 0.85,
+                'status': 'Analysis Complete'
+            }
+            
+        except Exception as e:
+            st.error(f"Error in RAG analysis: {str(e)}")
+            return {
+                'extracted_data': {},
+                'ai_insights': {},
+                'confidence_score': 0.0,
+                'status': 'Analysis Failed'
+            }
+    
+    def generate_ai_insights(self, extracted_data: Dict) -> Dict[str, Any]:
+        """Generate AI insights from extracted data"""
+        insights = {
+            'strengths': [],
+            'weaknesses': [],
+            'recommendations': [],
+            'risk_assessment': {},
+            'compliance_status': {}
+        }
+        
+        # Analyze academic metrics
+        academic_data = extracted_data.get('academic_metrics', {})
+        research_data = extracted_data.get('research_metrics', {})
+        
+        # Strength analysis
+        if academic_data.get('naac_grade') in ['A++', 'A+', 'A']:
+            insights['strengths'].append(f"Strong NAAC accreditation: {academic_data['naac_grade']}")
+        
+        if research_data.get('research_publications', 0) > 50:
+            insights['strengths'].append("Robust research publication output")
+        
+        # Weakness analysis
+        if academic_data.get('student_faculty_ratio', 0) > 25:
+            insights['weaknesses'].append("High student-faculty ratio needs improvement")
+        
+        if research_data.get('patents_filed', 0) < 5:
+            insights['weaknesses'].append("Limited patent filings - need to strengthen IPR culture")
+        
+        # Recommendations
+        if not academic_data.get('nirf_ranking'):
+            insights['recommendations'].append("Consider participating in NIRF ranking for better visibility")
+        
+        if research_data.get('industry_collaborations', 0) < 3:
+            insights['recommendations'].append("Increase industry collaborations for practical exposure")
+        
+        # Risk assessment
+        risk_score = self.calculate_risk_score(extracted_data)
+        insights['risk_assessment'] = {
+            'score': risk_score,
+            'level': 'Low' if risk_score < 4 else 'Medium' if risk_score < 7 else 'High',
+            'factors': self.identify_risk_factors(extracted_data)
+        }
+        
+        return insights
+    
+    def calculate_risk_score(self, extracted_data: Dict) -> float:
+        """Calculate risk score based on extracted data"""
+        score = 5.0  # Default medium risk
+        
+        academic_data = extracted_data.get('academic_metrics', {})
+        research_data = extracted_data.get('research_metrics', {})
+        financial_data = extracted_data.get('financial_metrics', {})
+        
+        # Positive factors (reduce risk)
+        if academic_data.get('naac_grade') in ['A++', 'A+', 'A']:
+            score -= 1.5
+        if research_data.get('research_publications', 0) > 50:
+            score -= 1.0
+        if financial_data.get('financial_stability_score', 0) > 7:
+            score -= 1.0
+        
+        # Negative factors (increase risk)
+        if academic_data.get('student_faculty_ratio', 0) > 25:
+            score += 1.5
+        if research_data.get('patents_filed', 0) < 2:
+            score += 1.0
+        if not academic_data.get('nirf_ranking'):
+            score += 0.5
+        
+        return max(1.0, min(10.0, score))
+    
+    def identify_risk_factors(self, extracted_data: Dict) -> List[str]:
+        """Identify specific risk factors"""
+        risk_factors = []
+        academic_data = extracted_data.get('academic_metrics', {})
+        research_data = extracted_data.get('research_metrics', {})
+        
+        if academic_data.get('student_faculty_ratio', 0) > 25:
+            risk_factors.append("High student-faculty ratio affecting quality")
+        if research_data.get('industry_collaborations', 0) < 2:
+            risk_factors.append("Limited industry exposure")
+        if not academic_data.get('naac_grade'):
+            risk_factors.append("No NAAC accreditation")
+        
+        return risk_factors
     
     def load_or_generate_data(self):
         """Load data from database or generate sample data"""
@@ -1763,6 +2032,207 @@ def create_approval_workflow(analyzer):
                 for feature in step['ai_features']:
                     st.write(f"• {feature}")
 
+def create_rag_data_management(analyzer):
+    st.header("🤖 RAG-Powered Data Management & Analysis")
+    
+    st.info("""
+    **Retrieval Augmented Generation (RAG) System**: 
+    Upload institutional documents and let AI automatically extract, analyze, and structure data 
+    for comprehensive institutional evaluation.
+    """)
+    
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📤 Upload & Extract", 
+        "🔍 View Extracted Data", 
+        "📊 AI Analysis",
+        "⚙️ RAG Settings"
+    ])
+    
+    with tab1:
+        st.subheader("Document Upload & Data Extraction")
+        
+        # Institution selection
+        current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
+        selected_institution = st.selectbox(
+            "Select Institution",
+            current_institutions,
+            key="rag_institution"
+        )
+        
+        uploaded_files = st.file_uploader(
+            "Upload Institutional Documents for RAG Analysis",
+            type=['pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls'],
+            accept_multiple_files=True,
+            help="Upload all relevant documents: Annual reports, NAAC reports, Research data, etc."
+        )
+        
+        if uploaded_files:
+            st.success(f"📄 {len(uploaded_files)} documents ready for analysis")
+            
+            # Show document preview
+            with st.expander("📋 Document Preview"):
+                for i, file in enumerate(uploaded_files):
+                    st.write(f"**{i+1}. {file.name}** ({file.size} bytes)")
+            
+            if st.button("🚀 Start RAG Analysis", type="primary"):
+                with st.spinner("🤖 AI is analyzing documents and extracting data..."):
+                    # Perform RAG analysis
+                    analysis_result = analyzer.analyze_documents_with_rag(
+                        selected_institution, 
+                        uploaded_files
+                    )
+                    
+                    if analysis_result['status'] == 'Analysis Complete':
+                        st.success("✅ RAG Analysis Completed Successfully!")
+                        
+                        # Store results in session state for other tabs
+                        st.session_state.rag_analysis = analysis_result
+                        st.session_state.selected_institution = selected_institution
+                        
+                        # Show quick insights
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric(
+                                "Confidence Score", 
+                                f"{analysis_result['confidence_score']:.2f}"
+                            )
+                        with col2:
+                            extracted_categories = len(analysis_result['extracted_data']) - 2  # exclude raw_text and file_names
+                            st.metric("Data Categories", extracted_categories)
+                        with col3:
+                            risk_level = analysis_result['ai_insights']['risk_assessment']['level']
+                            st.metric("Risk Level", risk_level)
+                    
+                    else:
+                        st.error("❌ RAG Analysis Failed. Please try again.")
+    
+    with tab2:
+        st.subheader("Extracted Data View")
+        
+        if 'rag_analysis' in st.session_state:
+            analysis_result = st.session_state.rag_analysis
+            
+            # Show extracted data by category
+            categories = [
+                ('Academic Metrics', 'academic_metrics'),
+                ('Research Metrics', 'research_metrics'), 
+                ('Infrastructure Metrics', 'infrastructure_metrics'),
+                ('Governance Metrics', 'governance_metrics'),
+                ('Financial Metrics', 'financial_metrics')
+            ]
+            
+            for category_name, category_key in categories:
+                with st.expander(f"📈 {category_name}"):
+                    category_data = analysis_result['extracted_data'].get(category_key, {})
+                    if category_data:
+                        for key, value in category_data.items():
+                            col1, col2 = st.columns([1, 2])
+                            with col1:
+                                st.write(f"**{key.replace('_', ' ').title()}:**")
+                            with col2:
+                                st.write(value)
+                    else:
+                        st.info(f"No {category_name.lower()} extracted from documents")
+            
+            # Show raw text preview
+            with st.expander("📝 Extracted Text Preview"):
+                raw_text = analysis_result['extracted_data'].get('raw_text', '')
+                if raw_text:
+                    st.text_area("Extracted Text", raw_text[:2000] + "..." if len(raw_text) > 2000 else raw_text, height=200)
+                else:
+                    st.info("No text extracted")
+                    
+        else:
+            st.info("👆 Upload documents and run RAG analysis to view extracted data")
+    
+    with tab3:
+        st.subheader("AI Insights & Analysis")
+        
+        if 'rag_analysis' in st.session_state:
+            analysis_result = st.session_state.rag_analysis
+            insights = analysis_result['ai_insights']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("✅ Strengths")
+                if insights['strengths']:
+                    for strength in insights['strengths']:
+                        st.success(f"• {strength}")
+                else:
+                    st.info("No significant strengths identified")
+                
+                st.subheader("🎯 Recommendations")
+                if insights['recommendations']:
+                    for rec in insights['recommendations']:
+                        st.warning(f"• {rec}")
+                else:
+                    st.info("No specific recommendations")
+            
+            with col2:
+                st.subheader("⚠️ Areas for Improvement")
+                if insights['weaknesses']:
+                    for weakness in insights['weaknesses']:
+                        st.error(f"• {weakness}")
+                else:
+                    st.info("No major weaknesses identified")
+                
+                st.subheader("📊 Risk Assessment")
+                risk_assessment = insights['risk_assessment']
+                st.metric("Risk Score", f"{risk_assessment['score']:.1f}/10")
+                st.write(f"**Risk Level:** {risk_assessment['level']}")
+                
+                if risk_assessment['factors']:
+                    st.write("**Risk Factors:**")
+                    for factor in risk_assessment['factors']:
+                        st.write(f"• {factor}")
+            
+            # Generate approval recommendation
+            st.subheader("🏛️ Approval Recommendation")
+            risk_level = insights['risk_assessment']['level']
+            if risk_level == 'Low':
+                st.success("**✅ RECOMMENDED: Full Approval - 5 Years**")
+                st.write("Institution demonstrates strong performance across all parameters with minimal risk factors.")
+            elif risk_level == 'Medium':
+                st.warning("**🟡 CONDITIONAL: Provisional Approval - 3 Years**")
+                st.write("Institution shows promise but has some areas requiring improvement and monitoring.")
+            else:
+                st.error("**🔴 NOT RECOMMENDED: Requires Significant Improvements**")
+                st.write("Critical risk factors identified. Institution needs substantial improvements before approval.")
+                
+        else:
+            st.info("👆 Run RAG analysis to generate AI insights")
+    
+    with tab4:
+        st.subheader("RAG System Settings")
+        
+        st.write("### 🔧 Configuration")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            chunk_size = st.slider("Text Chunk Size", 500, 2000, 1000, help="Size of text chunks for processing")
+            similarity_threshold = st.slider("Similarity Threshold", 0.1, 1.0, 0.7, help="Threshold for semantic similarity")
+        
+        with col2:
+            max_results = st.slider("Max Results", 1, 10, 5, help="Maximum number of similar results to return")
+            confidence_threshold = st.slider("Confidence Threshold", 0.1, 1.0, 0.8, help="Minimum confidence for data extraction")
+        
+        st.write("### 📊 System Status")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Embedding Model", "all-MiniLM-L6-v2")
+        with col2:
+            st.metric("Vector Store", "FAISS")
+        with col3:
+            st.metric("Text Splitter", "Recursive")
+        
+        if st.button("🔄 Reset RAG System"):
+            if 'rag_analysis' in st.session_state:
+                del st.session_state.rag_analysis
+            st.success("RAG system reset successfully!")
+
 def main():
     st.markdown("""
     <style>
@@ -1874,6 +2344,20 @@ def main():
     
     # Navigation
     st.sidebar.title("🧭 Navigation Panel")
+    st.sidebar.markdown("### AI Modules")
+
+    app_mode = st.sidebar.selectbox(
+        "Select Analysis Module",
+        [
+            "📊 Performance Dashboard",
+            "📋 Document Analysis", 
+            "🤖 AI Reports",
+            "🔍 RAG Data Management",  # NEW
+            "💾 Data Management",
+            "🔄 Approval Workflow",
+            "⚙️ System Settings"
+        ]
+    )
     
     # Authentication Section
     st.sidebar.markdown("---")
@@ -1912,6 +2396,9 @@ def main():
     
     elif app_mode == "🤖 AI Reports":
         create_ai_analysis_reports(analyzer)
+    
+    elif app_mode == "🔍 RAG Data Management":  # NEW
+        create_rag_data_management(analyzer)
     
     elif app_mode == "💾 Data Management":
         create_data_management_module(analyzer)
