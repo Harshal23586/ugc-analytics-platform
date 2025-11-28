@@ -229,7 +229,13 @@ class InstitutionalAIAnalyzer:
                 naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
                 naac_grade = np.random.choice(naac_grades, p=naac_probs)
                 
-                nirf_rank = np.random.choice(list(range(1, 201)) + [None]*50, p=[0.005]*200 + [0.5])
+                # FIXED: Ensure probability array matches choices array size
+                nirf_choices = list(range(1, 201)) + [None] * 50
+                nirf_probs = [0.005] * 200 + [0.01] * 50  # 200 ranks + 50 None values
+                # Normalize probabilities to sum to 1
+                nirf_probs = [p / sum(nirf_probs) for p in nirf_probs]
+                nirf_rank = np.random.choice(nirf_choices, p=nirf_probs)
+                
                 student_faculty_ratio = max(10, np.random.normal(20, 5))
                 phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3  # Beta distribution for ratios
                 
@@ -254,12 +260,13 @@ class InstitutionalAIAnalyzer:
                 community_projects = np.random.poisson(inst_trend * 8)
                 
                 # Calculate performance score
+                faculty_count = max(1, np.random.randint(30, 150))
                 performance_score = self.calculate_performance_score({
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
                     'student_faculty_ratio': student_faculty_ratio,
                     'phd_faculty_ratio': phd_faculty_ratio,
-                    'publications_per_faculty': publications / max(1, np.random.randint(30, 150)),
+                    'publications_per_faculty': publications / faculty_count,
                     'research_grants': research_grants,
                     'digital_infrastructure': digital_infrastructure_score,
                     'financial_stability': financial_stability,
