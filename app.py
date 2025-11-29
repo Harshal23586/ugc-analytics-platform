@@ -32,23 +32,20 @@ from sklearn.metrics.pairwise import cosine_similarity
 import re
 from typing import List
 
-# Initialize session state at module level
-if 'session_initialized' not in st.session_state:
-    st.session_state.session_initialized = True
-    st.session_state.institution_user = None
-    st.session_state.user_role = None
-    st.session_state.rag_analysis = None
-    st.session_state.selected_institution = None
-
+# Initialize session state safely inside functions
+def initialize_session_state():
+    if 'initialized' not in st.session_state:
+        st.session_state.initialized = True
+        st.session_state.institution_user = None
+        st.session_state.user_role = None
+        st.session_state.rag_analysis = None
+        st.session_state.selected_institution = None
+        
 class RAGDocument:
     def __init__(self, page_content: str, metadata: dict = None):
-        self.init_database()
-        self.historical_data = self.load_or_generate_data()
-        self.performance_metrics = self.define_performance_metrics()
-        self.document_requirements = self.define_document_requirements()
-        self.rag_extractor = RAGDataExtractor()
-        self.create_dummy_institution_users()
-
+        self.page_content = page_content
+        self.metadata = metadata or {}
+        
 class SimpleTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=200):
         self.chunk_size = chunk_size
@@ -2617,6 +2614,9 @@ def create_institution_login(analyzer):
 
 # Modify the main navigation section
 def main():
+    # Initialize session state first
+    initialize_session_state()
+    
     # Safe session state initialization
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
@@ -2849,6 +2849,8 @@ def main():
 
 # Also update the institution login to set the role properly
 def create_institution_login(analyzer):
+    # Call initialization at start
+    initialize_session_state()
     st.header("🏛️ Institution Portal Login")
     
     col1, col2 = st.columns(2)
