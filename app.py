@@ -2692,24 +2692,7 @@ def get_available_modules(user_role):
     else:
         return []
 
-def main():
-    st.write("### 🗂️ System Diagnostics")
-    
-    # Check current directory
-    st.write(f"**Working directory:** `{os.getcwd()}`")
-    
-    # List all files
-    files = os.listdir('.')
-    st.write(f"**Files in directory ({len(files)}):**")
-    for file in sorted(files):
-        st.write(f"- `{file}`")
-    
-    # Check for database
-    if os.path.exists('institutions.db'):
-        st.success("✅ Database file 'institutions.db' found!")
-    else:
-        st.error("❌ Database file 'institutions.db' not found!")
-        
+def main():     
     # Safe session state initialization
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
