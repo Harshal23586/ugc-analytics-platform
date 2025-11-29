@@ -1356,10 +1356,10 @@ def create_institution_login(analyzer):
     
     with col1:
         st.subheader("Existing Institution Users")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        username = st.text_input("Username", key="inst_login_username")  # ADD KEY
+        password = st.text_input("Password", type="password", key="inst_login_password")  # ADD KEY
         
-        if st.button("Login"):
+        if st.button("Login", key="inst_login_button"):
             user = analyzer.authenticate_institution_user(username, password)
             if user:
                 st.session_state.institution_user = user
@@ -1383,16 +1383,17 @@ def create_institution_login(analyzer):
             format_func=lambda x: available_institutions[
                 available_institutions['institution_id'] == x
             ]['institution_name'].iloc[0]
+            key="inst_reg_institution"  # ADD KEY
         )
         
-        new_username = st.text_input("Choose Username")
-        new_password = st.text_input("Choose Password", type="password")
-        confirm_password = st.text_input("Confirm Password", type="password")
-        contact_person = st.text_input("Contact Person Name")
-        email = st.text_input("Email Address")
-        phone = st.text_input("Phone Number")
+        new_username = st.text_input("Choose Username", key="inst_reg_username")  # ADD KEY
+        new_password = st.text_input("Choose Password", type="password", key="inst_reg_password")  # ADD KEY
+        confirm_password = st.text_input("Confirm Password", type="password", key="inst_reg_confirm")  # ADD KEY
+        contact_person = st.text_input("Contact Person Name", key="inst_reg_contact")  # ADD KEY
+        email = st.text_input("Email Address", key="inst_reg_email")  # ADD KEY
+        phone = st.text_input("Phone Number", key="inst_reg_phone")  # ADD KEY
         
-        if st.button("Register Institution Account"):
+        if st.button("Register Institution Account", key="inst_reg_button"):
             if new_password != confirm_password:
                 st.error("Passwords do not match!")
             elif not all([new_username, new_password, contact_person, email]):
@@ -1413,12 +1414,13 @@ def create_system_login(analyzer):
     role = st.selectbox(
         "Select Your Role",
         ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+        key="system_login_role"  # ADD THIS
     )
+
+    username = st.text_input("Username", key="system_login_username")  # ADD KEY
+    password = st.text_input("Password", type="password", key="system_login_password")  # ADD KEY
     
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    
-    if st.button("Login"):
+    if st.button("Login", key="system_login_button"):  # ADD KEY
         user = analyzer.authenticate_system_user(username, password, role)
         if user:
             st.session_state.system_user = user
