@@ -2529,7 +2529,93 @@ def create_rag_data_management(analyzer):
     with tab4:
         st.subheader("RAG System Settings")
         # ... (keep existing tab4 code, it doesn't use analysis_result)
+
+# Add this function for role-based access control
+def check_user_access(required_roles):
+    """Check if current user has access to the requested module"""
+    if 'user_role' not in st.session_state or st.session_state.user_role is None:
+        return False
+    return st.session_state.user_role in required_roles
+
+def show_access_denied():
+    """Show access denied message"""
+    st.error("🚫 Access Denied")
+    st.warning("You don't have permission to access this module. Please contact your system administrator.")
+    st.info(f"Your current role: {st.session_state.user_role}")
+
+# Add this function for role-based access control
+def check_user_access(required_roles):
+    """Check if current user has access to the requested module"""
+    if 'user_role' not in st.session_state or st.session_state.user_role is None:
+        return False
+    return st.session_state.user_role in required_roles
+
+def show_access_denied():
+    """Show access denied message"""
+    st.error("🚫 Access Denied")
+    st.warning("You don't have permission to access this module. Please contact your system administrator.")
+    st.info(f"Your current role: {st.session_state.user_role}")
+
+# Also update the institution login to set the role properly
+def create_institution_login(analyzer):
+    st.header("🏛️ Institution Portal Login")
     
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Existing Institution Users")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            user = analyzer.authenticate_institution_user(username, password)
+            if user:
+                st.session_state.institution_user = user
+                st.session_state.user_role = "Institution"  # Set role explicitly
+                st.success(f"Welcome, {user['contact_person']} from {user['institution_name']}!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+    
+    with col2:
+        st.subheader("New Institution Registration")
+        
+        # Get available institutions
+        available_institutions = analyzer.historical_data[
+            analyzer.historical_data['year'] == 2023
+        ][['institution_id', 'institution_name']].drop_duplicates()
+        
+        selected_institution = st.selectbox(
+            "Select Your Institution",
+            available_institutions['institution_id'].tolist(),
+            format_func=lambda x: available_institutions[
+                available_institutions['institution_id'] == x
+            ]['institution_name'].iloc[0]
+        )
+        
+        new_username = st.text_input("Choose Username")
+        new_password = st.text_input("Choose Password", type="password")
+        confirm_password = st.text_input("Confirm Password", type="password")
+        contact_person = st.text_input("Contact Person Name")
+        email = st.text_input("Email Address")
+        phone = st.text_input("Phone Number")
+        
+        if st.button("Register Institution Account"):
+            if new_password != confirm_password:
+                st.error("Passwords do not match!")
+            elif not all([new_username, new_password, contact_person, email]):
+                st.error("Please fill all required fields!")
+            else:
+                success = analyzer.create_institution_user(
+                    selected_institution, new_username, new_password,
+                    contact_person, email, phone
+                )
+                if success:
+                    st.success("Institution account created successfully! You can now login.")
+                else:
+                    st.error("Username already exists. Please choose a different username.")
+
+# Modify the main navigation section
 def main():
     # Safe session state initialization
     if 'institution_user' not in st.session_state:
@@ -2552,7 +2638,7 @@ def main():
             st.session_state.user_role = None
             st.rerun()
         return
-    
+
     # Main header and system overview
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
@@ -2577,108 +2663,250 @@ def main():
         </div>
         """, unsafe_allow_html=True)
     
-    st.success("✅ AI Analytics System Successfully Initialized!")
+    # Authentication Section
+    st.sidebar.title("🔐 Authentication")
+    st.sidebar.markdown("---")
     
-    # Display quick stats
-    st.subheader("📈 System Quick Stats")
-    col1, col2, col3, col4 = st.columns(4)
+    # Role selection for non-institution users
+    if st.session_state.user_role is None:
+        selected_role = st.sidebar.selectbox(
+            "Select Your Role",
+            ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee", "Institution"]
+        )
+        
+        password = st.sidebar.text_input("Enter System Password", type="password")
+        
+        if st.sidebar.button("Login"):
+            # Simple password-based authentication (replace with secure auth in production)
+            if password == "admin123":  # Default password for demo
+                st.session_state.user_role = selected_role
+                st.success(f"✅ Logged in as {selected_role}")
+                st.rerun()
+            else:
+                st.error("❌ Invalid password")
+    
+    # Show logout button if user is logged in
+    if st.session_state.user_role is not None:
+        st.sidebar.success(f"Logged in as: {st.session_state.user_role}")
+        if st.sidebar.button("🚪 Logout"):
+            st.session_state.user_role = None
+            st.rerun()
+    
+    st.sidebar.markdown("---")
+    
+    # Display quick stats (visible to all logged-in users)
+    if st.session_state.user_role is not None:
+        st.success("✅ AI Analytics System Successfully Initialized!")
+        
+        st.subheader("📈 System Quick Stats")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            total_institutions = len(analyzer.historical_data['institution_id'].unique())
+            st.metric("Total Institutions", total_institutions)
+        
+        with col2:
+            years_data = len(analyzer.historical_data['year'].unique())
+            st.metric("Years of Data", years_data)
+        
+        with col3:
+            current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+            if len(current_year_data) > 0:
+                avg_performance = current_year_data['performance_score'].mean()
+                st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
+            else:
+                st.metric("Avg Performance Score", "N/A")
+        
+        with col4:
+            if len(current_year_data) > 0:
+                approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
+                st.metric("Approval Ready", approval_ready)
+            else:
+                st.metric("Approval Ready", "N/A")
+    
+    # Navigation Panel - Show only if user is logged in
+    if st.session_state.user_role is not None:
+        st.sidebar.markdown("### 🧭 Navigation Panel")
+        
+        # Define available modules based on role
+        available_modules = []
+        
+        # System Admin exclusive modules
+        if check_user_access(["System Admin"]):
+            available_modules.extend([
+                "📊 Performance Dashboard",
+                "⚙️ System Settings"
+            ])
+        
+        # UGC Officer and AICTE Officer modules
+        if check_user_access(["UGC Officer", "AICTE Officer"]):
+            available_modules.extend([
+                "🔄 Approval Workflow",
+                "💾 Data Management", 
+                "🔍 RAG Data Management",
+                "📋 Document Analysis"
+            ])
+        
+        # Review Committee exclusive module
+        if check_user_access(["Review Committee"]):
+            available_modules.extend([
+                "🤖 AI Reports"
+            ])
+        
+        # Common modules for all roles (except Institution)
+        if st.session_state.user_role != "Institution":
+            available_modules.extend([
+                "🤖 AI Reports"  # AI Reports is available to Review Committee and Officers
+            ])
+        
+        # Remove duplicates and sort
+        available_modules = sorted(list(set(available_modules)))
+        
+        if available_modules:
+            app_mode = st.sidebar.selectbox(
+                "Select Analysis Module",
+                available_modules
+            )
+            
+            # Route to selected module with access control
+            if app_mode == "📊 Performance Dashboard":
+                if check_user_access(["System Admin"]):
+                    create_performance_dashboard(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "📋 Document Analysis":
+                if check_user_access(["UGC Officer", "AICTE Officer"]):
+                    create_document_analysis_module(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "🤖 AI Reports":
+                if check_user_access(["UGC Officer", "AICTE Officer", "Review Committee"]):
+                    create_ai_analysis_reports(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "🔍 RAG Data Management":
+                if check_user_access(["UGC Officer", "AICTE Officer"]):
+                    create_rag_data_management(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "💾 Data Management":
+                if check_user_access(["UGC Officer", "AICTE Officer"]):
+                    create_data_management_module(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "🔄 Approval Workflow":
+                if check_user_access(["UGC Officer", "AICTE Officer"]):
+                    create_approval_workflow(analyzer)
+                else:
+                    show_access_denied()
+            
+            elif app_mode == "⚙️ System Settings":
+                if check_user_access(["System Admin"]):
+                    st.header("⚙️ System Settings & Configuration")
+                    st.info("System administration and configuration panel")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.subheader("Performance Metrics Configuration")
+                        st.json(analyzer.performance_metrics)
+                    
+                    with col2:
+                        st.subheader("Document Requirements")
+                        st.json(analyzer.document_requirements)
+                    
+                    st.subheader("System Information")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Database Records", len(analyzer.historical_data))
+                    with col2:
+                        st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
+                    with col3:
+                        st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
+                else:
+                    show_access_denied()
+        
+        else:
+            st.warning("No modules available for your role. Please contact system administrator.")
+    
+    else:
+        # Show login prompt
+        st.info("👆 Please select your role and enter the password in the sidebar to access the system.")
+    
+    # Footer (visible to all)
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #6c757d;'>
+    <p><strong>UGC/AICTE Institutional Analytics Platform</strong> | AI-Powered Decision Support System</p>
+    <p>Version 2.0 | For authorized use only | Data last updated: {}</p>
+    </div>
+    """.format(datetime.now().strftime("%Y-%m-%d %H:%M")), unsafe_allow_html=True)
+
+# Also update the institution login to set the role properly
+def create_institution_login(analyzer):
+    st.header("🏛️ Institution Portal Login")
+    
+    col1, col2 = st.columns(2)
     
     with col1:
-        total_institutions = len(analyzer.historical_data['institution_id'].unique())
-        st.metric("Total Institutions", total_institutions)
+        st.subheader("Existing Institution Users")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            user = analyzer.authenticate_institution_user(username, password)
+            if user:
+                st.session_state.institution_user = user
+                st.session_state.user_role = "Institution"  # Set role explicitly
+                st.success(f"Welcome, {user['contact_person']} from {user['institution_name']}!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
     
     with col2:
-        years_data = len(analyzer.historical_data['year'].unique())
-        st.metric("Years of Data", years_data)
-    
-    with col3:
-        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
-        if len(current_year_data) > 0:
-            avg_performance = current_year_data['performance_score'].mean()
-            st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
-        else:
-            st.metric("Avg Performance Score", "N/A")
-    
-    with col4:
-        if len(current_year_data) > 0:
-            approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
-            st.metric("Approval Ready", approval_ready)
-        else:
-            st.metric("Approval Ready", "N/A")
-    
-    # SINGLE sidebar navigation section
-    st.sidebar.title("🧭 Navigation Panel")
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔐 Authentication")
-    
-    user_role = st.sidebar.selectbox(
-        "Select Your Role",
-        ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
-    )
-    
-    if user_role == "Institution":
-        create_institution_login(analyzer)
-        return
-    
-    # For other roles, show the AI modules
-    st.sidebar.markdown("### AI Modules")
-    
-    app_mode = st.sidebar.selectbox(
-        "Select Analysis Module",
-        [
-            "📊 Performance Dashboard",
-            "📋 Document Analysis", 
-            "🤖 AI Reports",
-            "🔍 RAG Data Management",
-            "💾 Data Management",
-            "🔄 Approval Workflow",
-            "⚙️ System Settings"
-        ]
-    )
-    
-    # Route to selected module
-    if app_mode == "📊 Performance Dashboard":
-        create_performance_dashboard(analyzer)
-    
-    elif app_mode == "📋 Document Analysis":
-        create_document_analysis_module(analyzer)
-    
-    elif app_mode == "🤖 AI Reports":
-        create_ai_analysis_reports(analyzer)
-    
-    elif app_mode == "🔍 RAG Data Management":
-        create_rag_data_management(analyzer)
-    
-    elif app_mode == "💾 Data Management":
-        create_data_management_module(analyzer)
-    
-    elif app_mode == "🔄 Approval Workflow":
-        create_approval_workflow(analyzer)
-    
-    elif app_mode == "⚙️ System Settings":
-        st.header("⚙️ System Settings & Configuration")
-        st.info("System administration and configuration panel")
+        st.subheader("New Institution Registration")
         
-        col1, col2 = st.columns(2)
+        # Get available institutions
+        available_institutions = analyzer.historical_data[
+            analyzer.historical_data['year'] == 2023
+        ][['institution_id', 'institution_name']].drop_duplicates()
         
-        with col1:
-            st.subheader("Performance Metrics Configuration")
-            st.json(analyzer.performance_metrics)
+        selected_institution = st.selectbox(
+            "Select Your Institution",
+            available_institutions['institution_id'].tolist(),
+            format_func=lambda x: available_institutions[
+                available_institutions['institution_id'] == x
+            ]['institution_name'].iloc[0]
+        )
         
-        with col2:
-            st.subheader("Document Requirements")
-            st.json(analyzer.document_requirements)
+        new_username = st.text_input("Choose Username")
+        new_password = st.text_input("Choose Password", type="password")
+        confirm_password = st.text_input("Confirm Password", type="password")
+        contact_person = st.text_input("Contact Person Name")
+        email = st.text_input("Email Address")
+        phone = st.text_input("Phone Number")
         
-        st.subheader("System Information")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Database Records", len(analyzer.historical_data))
-        with col2:
-            st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
-        with col3:
-            st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
+        if st.button("Register Institution Account"):
+            if new_password != confirm_password:
+                st.error("Passwords do not match!")
+            elif not all([new_username, new_password, contact_person, email]):
+                st.error("Please fill all required fields!")
+            else:
+                success = analyzer.create_institution_user(
+                    selected_institution, new_username, new_password,
+                    contact_person, email, phone
+                )
+                if success:
+                    st.success("Institution account created successfully! You can now login.")
+                else:
+                    st.error("Username already exists. Please choose a different username.")
     
-    # Footer
+    # Footer (visible to all)
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #6c757d;'>
