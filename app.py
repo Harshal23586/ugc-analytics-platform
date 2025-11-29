@@ -1382,8 +1382,8 @@ def create_institution_login(analyzer):
             available_institutions['institution_id'].tolist(),
             format_func=lambda x: available_institutions[
                 available_institutions['institution_id'] == x
-            ]['institution_name'].iloc[0]
-            key="inst_reg_institution"  # ADD KEY
+            ]['institution_name'].iloc[0],
+            key="inst_reg_institution"
         )
         
         new_username = st.text_input("Choose Username", key="inst_reg_username")  # ADD KEY
