@@ -340,6 +340,8 @@ class InstitutionalAIAnalyzer:
         self.document_requirements = self.define_document_requirements()
         self.rag_extractor = RAGDataExtractor()
         self.create_dummy_institution_users()
+        self.create_dummy_system_users()  # ADD THIS LINE
+
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
@@ -347,7 +349,62 @@ class InstitutionalAIAnalyzer:
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
 
+    def create_dummy_system_users(self):
+        """Create dummy system users for testing"""
+        system_users = [
+            {
+                'username': 'ugc_officer',
+                'password': 'ugc123',
+                'full_name': 'UGC Department Officer',
+                'email': 'ugc.officer@ugc.gov.in',
+                'role': 'UGC Officer',
+                'department': 'UGC Approval Division'
+            },
+            {
+                'username': 'aicte_officer',
+                'password': 'aicte123',
+                'full_name': 'AICTE Department Officer',
+                'email': 'aicte.officer@aicte.gov.in',
+                'role': 'AICTE Officer',
+                'department': 'AICTE Approval Division'
+            },
+            {
+                'username': 'system_admin',
+                'password': 'admin123',
+                'full_name': 'System Administrator',
+                'email': 'admin@ugc-aicte.gov.in',
+                'role': 'System Admin',
+                'department': 'IT Department'
+            },
+            {
+                'username': 'review_committee',
+                'password': 'review123',
+                'full_name': 'Review Committee Member',
+                'email': 'review.committee@ugc-aicte.gov.in',
+                'role': 'Review Committee',
+                'department': 'Review Committee'
+            }
+        ]
     
+        for user_data in system_users:
+            try:
+                # Check if user already exists
+                cursor = self.conn.cursor()
+                cursor.execute('SELECT * FROM system_users WHERE username = ?', (user_data['username'],))
+                existing_user = cursor.fetchone()
+        
+                if not existing_user:
+                    self.create_system_user(
+                        user_data['username'],
+                        user_data['password'],
+                        user_data['full_name'],
+                        user_data['email'],
+                        user_data['role'],
+                        user_data['department']
+                    )
+                    print(f"Created system user: {user_data['username']}")
+            except Exception as e:
+                print(f"Error creating system user {user_data['username']}: {e}")    
         
         # Create institutions table
         cursor.execute('''
