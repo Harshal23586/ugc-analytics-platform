@@ -1413,7 +1413,7 @@ def create_system_login(analyzer):
     
     role = st.selectbox(
         "Select Your Role",
-        ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+        ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee"],
         key="system_login_role"  # ADD THIS
     )
 
