@@ -42,12 +42,8 @@ if 'session_initialized' not in st.session_state:
 
 class RAGDocument:
     def __init__(self, page_content: str, metadata: dict = None):
-        self.init_database()
-        self.historical_data = self.load_or_generate_data()
-        self.performance_metrics = self.define_performance_metrics()
-        self.document_requirements = self.define_document_requirements()
-        self.rag_extractor = RAGDataExtractor()
-        self.create_dummy_institution_users()
+        self.page_content = page_content
+        self.metadata = metadata or {}
 
 class SimpleTextSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=200):
@@ -273,25 +269,11 @@ class RAGDataExtractor:
                 else:
                     data['governance_metrics'][key] = match.group(1)
     
-    def build_vector_store(self, documents: List[RAGDocument]):
-        """Build FAISS vector store from documents"""
-        texts = [doc.page_content for doc in documents]
-        if not texts:
-            return None
-            
-        embeddings = self.embedding_model.encode(texts)
-        self.vector_store = FAISS.from_embeddings(
-            list(zip(texts, embeddings)),
-            self.embedding_model
-        )
-        self.documents = documents
-        
     def query_documents(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
         """Query documents using semantic search"""
         if not self.vector_store:
             return []
             
-        query_embedding = self.embedding_model.encode([query])
         results = self.vector_store.similarity_search_with_score(query, k=k)
         return results
 
@@ -467,6 +449,21 @@ class InstitutionalAIAnalyzer:
                 is_active INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+            )
+        ''')
+        
+        # Create system users table for other roles
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password_hash TEXT,
+                full_name TEXT,
+                email TEXT,
+                role TEXT,
+                department TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -861,22 +858,46 @@ class InstitutionalAIAnalyzer:
                     'email': user_dict.get('email', '')
                 }
         return None
-    
-    def hash_password(self, password: str) -> str:
-        """Simple password hashing (use proper hashing in production)"""
-        return hashlib.sha256(password.encode()).hexdigest()
 
-    def create_institution_user(self, institution_id: str, username: str, password: str, 
-                              contact_person: str, email: str, phone: str):
-        """Create new institution user account"""
+    def authenticate_system_user(self, username: str, password: str, role: str) -> Dict:
+        """Authenticate system user (UGC Officer, AICTE Officer, System Admin, Review Committee)"""
+        if not username or not password:
+            return None
+        
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM system_users 
+            WHERE username = ? AND role = ? AND is_active = 1
+        ''', (username, role))
+    
+        user = cursor.fetchone()
+        if user:
+            # Convert to dictionary safely
+            columns = [description[0] for description in cursor.description]
+            user_dict = dict(zip(columns, user))
+        
+            # Check if password_hash exists and matches
+            password_hash = user_dict.get('password_hash')
+            if password_hash and password_hash == self.hash_password(password):
+                return {
+                    'username': user_dict.get('username'),
+                    'full_name': user_dict.get('full_name'),
+                    'role': user_dict.get('role'),
+                    'department': user_dict.get('department'),
+                    'email': user_dict.get('email')
+                }
+        return None
+
+    def create_system_user(self, username: str, password: str, full_name: str, 
+                          email: str, role: str, department: str):
+        """Create new system user account"""
         cursor = self.conn.cursor()
         try:
             cursor.execute('''
-                INSERT INTO institution_users 
-                (institution_id, username, password_hash, contact_person, email, phone)
+                INSERT INTO system_users 
+                (username, password_hash, full_name, email, role, department)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (institution_id, username, self.hash_password(password), 
-                  contact_person, email, phone))
+            ''', (username, self.hash_password(password), full_name, email, role, department))
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -900,59 +921,59 @@ class InstitutionalAIAnalyzer:
             WHERE institution_id = ? 
             ORDER BY submitted_date DESC
         ''', self.conn, params=(institution_id,))
-    
+
+
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
         """Generate comprehensive historical data for institutions"""
         np.random.seed(42)
         n_institutions = 200
         years_of_data = 5
-        
+    
         institutions_data = []
-        
+    
         for inst_id in range(1, n_institutions + 1):
             base_quality = np.random.uniform(0.3, 0.9)
-            
+        
             for year_offset in range(years_of_data):
                 year = 2023 - year_offset
                 inst_trend = base_quality + (year_offset * 0.02)
-                
+            
                 # Generate realistic data with proper distributions
                 naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
                 naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
                 naac_grade = np.random.choice(naac_grades, p=naac_probs)
-                
-                # FIXED: Ensure probability array matches choices array size
+            
+                # Ensure all fields have data
                 nirf_choices = list(range(1, 201)) + [None] * 50
-                nirf_probs = [0.005] * 200 + [0.01] * 50  # 200 ranks + 50 None values
-                # Normalize probabilities to sum to 1
+                nirf_probs = [0.005] * 200 + [0.01] * 50
                 nirf_probs = [p / sum(nirf_probs) for p in nirf_probs]
                 nirf_rank = np.random.choice(nirf_choices, p=nirf_probs)
-                
+            
                 student_faculty_ratio = max(10, np.random.normal(20, 5))
-                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3  # Beta distribution for ratios
-                
-                # Research metrics with realistic distributions
-                publications = max(0, int(np.random.poisson(inst_trend * 30)))
-                research_grants = max(0, int(np.random.exponential(inst_trend * 500000)))
-                patents = np.random.poisson(inst_trend * 3)
-                
-                # Infrastructure scores
-                digital_infrastructure_score = max(1, min(10, np.random.normal(7, 1.5)))
-                library_volumes = max(1000, int(np.random.normal(20000, 10000)))
-                
+                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
+            
+                # Research metrics - ensure non-zero values
+                publications = max(5, int(np.random.poisson(inst_trend * 30)))
+                research_grants = max(100000, int(np.random.exponential(inst_trend * 500000)))
+                patents = max(0, int(np.random.poisson(inst_trend * 3)))
+            
+                # Infrastructure scores - ensure valid ranges
+                digital_infrastructure_score = max(3, min(10, np.random.normal(7, 1.5)))
+                library_volumes = max(5000, int(np.random.normal(20000, 10000)))
+            
                 # Governance scores
-                financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
-                compliance_score = max(1, min(10, np.random.normal(8, 1)))
-                
-                # Student development
+                financial_stability = max(4, min(10, np.random.normal(7.5, 1.2)))
+                compliance_score = max(5, min(10, np.random.normal(8, 1)))
+            
+                # Student development - ensure realistic values
                 placement_rate = max(40, min(98, np.random.normal(75, 10)))
                 higher_education_rate = max(5, min(50, np.random.normal(20, 8)))
-                
+            
                 # Social impact
-                community_projects = np.random.poisson(inst_trend * 8)
-                
+                community_projects = max(1, int(np.random.poisson(inst_trend * 8)))
+            
                 # Calculate performance score
-                faculty_count = max(1, np.random.randint(30, 150))
+                faculty_count = max(30, np.random.randint(30, 150))
                 performance_score = self.calculate_performance_score({
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
@@ -965,7 +986,17 @@ class InstitutionalAIAnalyzer:
                     'placement_rate': placement_rate,
                     'community_engagement': community_projects
                 })
-                
+            
+                # Generate risk levels based on performance
+                if performance_score >= 8.0:
+                    risk_level = "Low Risk"
+                elif performance_score >= 6.5:
+                    risk_level = "Medium Risk"
+                elif performance_score >= 5.0:
+                    risk_level = "High Risk"
+                else:
+                    risk_level = "Critical Risk"
+            
                 institution_data = {
                     'institution_id': f'INST_{inst_id:04d}',
                     'institution_name': f'University/College {inst_id:03d}',
@@ -973,55 +1004,55 @@ class InstitutionalAIAnalyzer:
                     'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College'], p=[0.3, 0.2, 0.3, 0.2]),
                     'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat'], p=[0.2, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]),
                     'established_year': np.random.randint(1950, 2015),
-                    
+                
                     # Academic Metrics
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
                     'student_faculty_ratio': round(student_faculty_ratio, 1),
                     'phd_faculty_ratio': round(phd_faculty_ratio, 3),
-                    
+                
                     # Research Metrics
                     'research_publications': publications,
                     'research_grants_amount': research_grants,
                     'patents_filed': patents,
-                    'industry_collaborations': np.random.poisson(inst_trend * 6),
-                    
+                    'industry_collaborations': max(1, int(np.random.poisson(inst_trend * 6))),
+                
                     # Infrastructure Metrics
                     'digital_infrastructure_score': round(digital_infrastructure_score, 1),
                     'library_volumes': library_volumes,
-                    'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
-                    
+                    'laboratory_equipment_score': round(max(3, min(10, np.random.normal(7, 1.3))), 1),
+                
                     # Governance Metrics
                     'financial_stability_score': round(financial_stability, 1),
                     'compliance_score': round(compliance_score, 1),
-                    'administrative_efficiency': round(max(1, min(10, np.random.normal(7.2, 1.1))), 1),
-                    
+                    'administrative_efficiency': round(max(4, min(10, np.random.normal(7.2, 1.1))), 1),
+                
                     # Student Development Metrics
                     'placement_rate': round(placement_rate, 1),
                     'higher_education_rate': round(higher_education_rate, 1),
-                    'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
-                    
+                    'entrepreneurship_cell_score': round(max(3, min(10, np.random.normal(6.5, 1.5))), 1),
+                
                     # Social Impact Metrics
                     'community_projects': community_projects,
-                    'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
-                    'inclusive_education_index': round(max(1, min(10, np.random.normal(7.5, 1.2))), 1),
-                    
+                    'rural_outreach_score': round(max(3, min(10, np.random.normal(6.8, 1.4))), 1),
+                    'inclusive_education_index': round(max(4, min(10, np.random.normal(7.5, 1.2))), 1),
+                
                     # Government Schemes Participation
                     'rusa_participation': np.random.choice([0, 1], p=[0.4, 0.6]),
                     'nmeict_participation': np.random.choice([0, 1], p=[0.5, 0.5]),
                     'fist_participation': np.random.choice([0, 1], p=[0.6, 0.4]),
                     'dst_participation': np.random.choice([0, 1], p=[0.7, 0.3]),
-                    
+                
                     # Overall Performance
                     'performance_score': round(performance_score, 2),
                     'approval_recommendation': self.generate_approval_recommendation(performance_score),
-                    'risk_level': self.assess_risk_level(performance_score)
+                    'risk_level': risk_level
                 }
-                
+            
                 institutions_data.append(institution_data)
-        
-        return pd.DataFrame(institutions_data)
     
+        return pd.DataFrame(institutions_data)
+        
     def calculate_performance_score(self, metrics: Dict) -> float:
         """Calculate overall performance score based on weighted metrics"""
         score = 0
@@ -1376,6 +1407,27 @@ def create_institution_login(analyzer):
                 else:
                     st.error("Username already exists. Please choose a different username.")
 
+def create_system_login(analyzer):
+    st.header("🔐 System Login")
+    
+    role = st.selectbox(
+        "Select Your Role",
+        ["UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
+    )
+    
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login"):
+        user = analyzer.authenticate_system_user(username, password, role)
+        if user:
+            st.session_state.system_user = user
+            st.session_state.user_role = role
+            st.success(f"Welcome, {user['full_name']} ({role})!")
+            st.rerun()
+        else:
+            st.error("Invalid credentials for selected role!")
+
 def create_institution_dashboard(analyzer, user):
     if not user:
         st.error("No user data available")
@@ -1716,7 +1768,7 @@ def create_performance_dashboard(analyzer):
         st.metric("Average Placement Rate", f"{avg_placement:.1f}%")
     
     with col5:
-        research_intensity = current_year_data['research_publications'].sum() / current_year_data['research_publications'].count()
+        research_intensity = current_year_data['research_publications'].sum() / len(current_year_data)
         st.metric("Avg Research Publications", f"{research_intensity:.1f}")
     
     # Performance Analysis
@@ -1725,57 +1777,72 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Performance Distribution
-        fig1 = px.histogram(
-            current_year_data, 
-            x='performance_score',
-            title="Distribution of Institutional Performance Scores",
-            nbins=20,
-            color_discrete_sequence=['#1f77b4'],
-            opacity=0.8
-        )
-        fig1.update_layout(
-            xaxis_title="Performance Score", 
-            yaxis_title="Number of Institutions",
-            showlegend=False
-        )
-        st.plotly_chart(fig1, use_container_width=True)
+        # Performance Distribution - FIXED
+        if not current_year_data['performance_score'].empty:
+            fig1 = px.histogram(
+                current_year_data, 
+                x='performance_score',
+                title="Distribution of Institutional Performance Scores",
+                nbins=20,
+                color_discrete_sequence=['#1f77b4'],
+                opacity=0.8
+            )
+            fig1.update_layout(
+                xaxis_title="Performance Score", 
+                yaxis_title="Number of Institutions",
+                showlegend=False
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("No performance score data available for histogram")
     
     with col2:
-        # Performance by Institution Type
-        fig2 = px.box(
-            current_year_data,
-            x='institution_type',
-            y='performance_score',
-            title="Performance Score by Institution Type",
-            color='institution_type'
-        )
-        fig2.update_layout(
-            xaxis_title="Institution Type",
-            yaxis_title="Performance Score",
-            showlegend=False
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+        # Performance by Institution Type - FIXED
+        if not current_year_data.empty and 'institution_type' in current_year_data.columns:
+            # Remove any empty institution types
+            filtered_data = current_year_data.dropna(subset=['institution_type', 'performance_score'])
+            if not filtered_data.empty:
+                fig2 = px.box(
+                    filtered_data,
+                    x='institution_type',
+                    y='performance_score',
+                    title="Performance Score by Institution Type",
+                    color='institution_type'
+                )
+                fig2.update_layout(
+                    xaxis_title="Institution Type",
+                    yaxis_title="Performance Score",
+                    showlegend=False
+                )
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.info("No data available for performance by institution type")
+        else:
+            st.info("Institution type data not available")
     
-    # Trend Analysis
+    # Trend Analysis - FIXED
     st.subheader("📅 Historical Performance Trends")
     
+    # Ensure we have multiple years of data
     trend_data = df.groupby(['year', 'institution_type'])['performance_score'].mean().reset_index()
     
-    fig3 = px.line(
-        trend_data,
-        x='year',
-        y='performance_score',
-        color='institution_type',
-        title="Average Performance Score Trend (2019-2023)",
-        markers=True
-    )
-    fig3.update_layout(
-        xaxis_title="Year", 
-        yaxis_title="Average Performance Score",
-        legend_title="Institution Type"
-    )
-    st.plotly_chart(fig3, use_container_width=True)
+    if len(trend_data) > 1 and not trend_data.empty:
+        fig3 = px.line(
+            trend_data,
+            x='year',
+            y='performance_score',
+            color='institution_type',
+            title="Average Performance Score Trend (2019-2023)",
+            markers=True
+        )
+        fig3.update_layout(
+            xaxis_title="Year", 
+            yaxis_title="Average Performance Score",
+            legend_title="Institution Type"
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+    else:
+        st.info("Insufficient data for trend analysis")
     
     # Risk Analysis
     st.subheader("⚠️ Institutional Risk Analysis")
@@ -1783,43 +1850,51 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
+        # Risk Distribution Pie Chart - FIXED
         risk_distribution = current_year_data['risk_level'].value_counts()
-        fig4 = px.pie(
-            values=risk_distribution.values,
-            names=risk_distribution.index,
-            title="Institutional Risk Level Distribution",
-            color=risk_distribution.index,
-            color_discrete_map={
-                'Low Risk': '#2ecc71',
-                'Medium Risk': '#f39c12',
-                'High Risk': '#e74c3c',
-                'Critical Risk': '#c0392b'
-            }
-        )
-        st.plotly_chart(fig4, use_container_width=True)
+        if not risk_distribution.empty:
+            fig4 = px.pie(
+                values=risk_distribution.values,
+                names=risk_distribution.index,
+                title="Institutional Risk Level Distribution",
+                color=risk_distribution.index,
+                color_discrete_map={
+                    'Low Risk': '#2ecc71',
+                    'Medium Risk': '#f39c12',
+                    'High Risk': '#e74c3c',
+                    'Critical Risk': '#c0392b'
+                }
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("No risk level data available")
     
     with col2:
-        # Placement vs Research Analysis
-        fig5 = px.scatter(
-            current_year_data,
-            x='research_publications',
-            y='placement_rate',
-            color='risk_level',
-            size='performance_score',
-            hover_data=['institution_name'],
-            title="Research Output vs Placement Rate",
-            color_discrete_map={
-                'Low Risk': '#2ecc71',
-                'Medium Risk': '#f39c12',
-                'High Risk': '#e74c3c',
-                'Critical Risk': '#c0392b'
-            }
-        )
-        fig5.update_layout(
-            xaxis_title="Research Publications",
-            yaxis_title="Placement Rate (%)"
-        )
-        st.plotly_chart(fig5, use_container_width=True)
+        # Placement vs Research Analysis - FIXED
+        scatter_data = current_year_data.dropna(subset=['research_publications', 'placement_rate', 'risk_level'])
+        if not scatter_data.empty:
+            fig5 = px.scatter(
+                scatter_data,
+                x='research_publications',
+                y='placement_rate',
+                color='risk_level',
+                size='performance_score',
+                hover_data=['institution_name'],
+                title="Research Output vs Placement Rate",
+                color_discrete_map={
+                    'Low Risk': '#2ecc71',
+                    'Medium Risk': '#f39c12',
+                    'High Risk': '#e74c3c',
+                    'Critical Risk': '#c0392b'
+                }
+            )
+            fig5.update_layout(
+                xaxis_title="Research Publications",
+                yaxis_title="Placement Rate (%)"
+            )
+            st.plotly_chart(fig5, use_container_width=True)
+        else:
+            st.info("No data available for research vs placement analysis")
     
     # Additional Visualizations
     st.subheader("🎯 Additional Insights")
@@ -1827,38 +1902,49 @@ def create_performance_dashboard(analyzer):
     col1, col2 = st.columns(2)
     
     with col1:
-        # State-wise Performance
-        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False).head(10)
-        fig6 = px.bar(
-            x=state_performance.index,
-            y=state_performance.values,
-            title="Top 10 States by Average Performance Score",
-            color=state_performance.values,
-            color_continuous_scale='Viridis'
-        )
-        fig6.update_layout(
-            xaxis_title="State",
-            yaxis_title="Average Performance Score",
-            showlegend=False
-        )
-        st.plotly_chart(fig6, use_container_width=True)
+        # State-wise Performance - FIXED
+        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False)
+        if not state_performance.empty:
+            # Take top 10 states with valid data
+            top_states = state_performance.dropna().head(10)
+            if not top_states.empty:
+                fig6 = px.bar(
+                    x=top_states.index,
+                    y=top_states.values,
+                    title="Top 10 States by Average Performance Score",
+                    color=top_states.values,
+                    color_continuous_scale='Viridis'
+                )
+                fig6.update_layout(
+                    xaxis_title="State",
+                    yaxis_title="Average Performance Score",
+                    showlegend=False
+                )
+                st.plotly_chart(fig6, use_container_width=True)
+            else:
+                st.info("No state performance data available")
+        else:
+            st.info("No state data available")
     
     with col2:
-        # NAAC Grade Distribution
+        # NAAC Grade Distribution - FIXED
         naac_dist = current_year_data['naac_grade'].value_counts()
-        fig7 = px.bar(
-            x=naac_dist.index,
-            y=naac_dist.values,
-            title="NAAC Grade Distribution",
-            color=naac_dist.index,
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig7.update_layout(
-            xaxis_title="NAAC Grade",
-            yaxis_title="Number of Institutions",
-            showlegend=False
-        )
-        st.plotly_chart(fig7, use_container_width=True)
+        if not naac_dist.empty:
+            fig7 = px.bar(
+                x=naac_dist.index,
+                y=naac_dist.values,
+                title="NAAC Grade Distribution",
+                color=naac_dist.index,
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig7.update_layout(
+                xaxis_title="NAAC Grade",
+                yaxis_title="Number of Institutions",
+                showlegend=False
+            )
+            st.plotly_chart(fig7, use_container_width=True)
+        else:
+            st.info("No NAAC grade data available")
 
 def create_document_analysis_module(analyzer):
     st.header("📋 AI-Powered Document Sufficiency Analysis")
@@ -2485,13 +2571,51 @@ def create_rag_data_management(analyzer):
     with tab4:
         st.subheader("RAG System Settings")
         # ... (keep existing tab4 code, it doesn't use analysis_result)
+
+def create_system_settings(analyzer):
+    st.header("⚙️ System Settings & Configuration")
+    st.info("System administration and configuration panel")
     
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Performance Metrics Configuration")
+        st.json(analyzer.performance_metrics)
+    
+    with col2:
+        st.subheader("Document Requirements")
+        st.json(analyzer.document_requirements)
+    
+    st.subheader("System Information")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Database Records", len(analyzer.historical_data))
+    with col2:
+        st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
+    with col3:
+        st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
+
+def get_available_modules(user_role):
+    """Return available modules based on user role"""
+    if user_role == "Institution":
+        return ["🏛️ Institution Portal"]
+    elif user_role == "System Admin":
+        return ["📊 Performance Dashboard", "⚙️ System Settings"]
+    elif user_role in ["UGC Officer", "AICTE Officer"]:
+        return ["🔄 Approval Workflow", "💾 Data Management", "🔍 RAG Data Management", "📋 Document Analysis"]
+    elif user_role == "Review Committee":
+        return ["🤖 AI Reports"]
+    else:
+        return []
+
 def main():
     # Safe session state initialization
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
     if 'user_role' not in st.session_state:
         st.session_state.user_role = None
+    if 'system_user' not in st.session_state:
+        st.session_state.system_user = None
     
     # Initialize analytics engine with error handling
     try:
@@ -2500,7 +2624,7 @@ def main():
         st.error(f"❌ System initialization error: {str(e)}")
         st.stop()
     
-    # Check if institution user is logged in
+    # Check if user is logged in
     if st.session_state.institution_user is not None:
         create_institution_dashboard(analyzer, st.session_state.institution_user)
         if st.sidebar.button("🚪 Logout"):
@@ -2509,11 +2633,53 @@ def main():
             st.rerun()
         return
     
-    # Main header and system overview
+    if st.session_state.system_user is not None:
+        user_role = st.session_state.user_role
+        available_modules = get_available_modules(user_role)
+        
+        st.sidebar.title(f"🧭 {user_role} Navigation")
+        st.sidebar.markdown("---")
+        
+        if available_modules:
+            selected_module = st.sidebar.selectbox("Select Module", available_modules)
+            
+            # Route to selected module based on role
+            if selected_module == "📊 Performance Dashboard" and user_role == "System Admin":
+                create_performance_dashboard(analyzer)
+            elif selected_module == "⚙️ System Settings" and user_role == "System Admin":
+                create_system_settings(analyzer)
+            elif selected_module == "🔄 Approval Workflow" and user_role in ["UGC Officer", "AICTE Officer"]:
+                create_approval_workflow(analyzer)
+            elif selected_module == "💾 Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
+                create_data_management_module(analyzer)
+            elif selected_module == "🔍 RAG Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
+                create_rag_data_management(analyzer)
+            elif selected_module == "📋 Document Analysis" and user_role in ["UGC Officer", "AICTE Officer"]:
+                create_document_analysis_module(analyzer)
+            elif selected_module == "🤖 AI Reports" and user_role == "Review Committee":
+                create_ai_analysis_reports(analyzer)
+        
+        if st.sidebar.button("🚪 Logout"):
+            st.session_state.system_user = None
+            st.session_state.user_role = None
+            st.rerun()
+        return
+    
+    # Main authentication page
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
+    # Authentication tabs
+    auth_tabs = st.tabs(["🏛️ Institution Login", "🔐 System Login"])
+    
+    with auth_tabs[0]:
+        create_institution_login(analyzer)
+    
+    with auth_tabs[1]:
+        create_system_login(analyzer)
+    
     # System overview
+    st.markdown("---")
     col1, col2 = st.columns([2, 1])
     
     with col1:
@@ -2562,78 +2728,6 @@ def main():
         else:
             st.metric("Approval Ready", "N/A")
     
-    # SINGLE sidebar navigation section
-    st.sidebar.title("🧭 Navigation Panel")
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔐 Authentication")
-    
-    user_role = st.sidebar.selectbox(
-        "Select Your Role",
-        ["Institution", "UGC Officer", "AICTE Officer", "System Admin", "Review Committee"]
-    )
-    
-    if user_role == "Institution":
-        create_institution_login(analyzer)
-        return
-    
-    # For other roles, show the AI modules
-    st.sidebar.markdown("### AI Modules")
-    
-    app_mode = st.sidebar.selectbox(
-        "Select Analysis Module",
-        [
-            "📊 Performance Dashboard",
-            "📋 Document Analysis", 
-            "🤖 AI Reports",
-            "🔍 RAG Data Management",
-            "💾 Data Management",
-            "🔄 Approval Workflow",
-            "⚙️ System Settings"
-        ]
-    )
-    
-    # Route to selected module
-    if app_mode == "📊 Performance Dashboard":
-        create_performance_dashboard(analyzer)
-    
-    elif app_mode == "📋 Document Analysis":
-        create_document_analysis_module(analyzer)
-    
-    elif app_mode == "🤖 AI Reports":
-        create_ai_analysis_reports(analyzer)
-    
-    elif app_mode == "🔍 RAG Data Management":
-        create_rag_data_management(analyzer)
-    
-    elif app_mode == "💾 Data Management":
-        create_data_management_module(analyzer)
-    
-    elif app_mode == "🔄 Approval Workflow":
-        create_approval_workflow(analyzer)
-    
-    elif app_mode == "⚙️ System Settings":
-        st.header("⚙️ System Settings & Configuration")
-        st.info("System administration and configuration panel")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Performance Metrics Configuration")
-            st.json(analyzer.performance_metrics)
-        
-        with col2:
-            st.subheader("Document Requirements")
-            st.json(analyzer.document_requirements)
-        
-        st.subheader("System Information")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Database Records", len(analyzer.historical_data))
-        with col2:
-            st.metric("Unique Institutions", analyzer.historical_data['institution_id'].nunique())
-        with col3:
-            st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
-    
     # Footer
     st.markdown("---")
     st.markdown("""
@@ -2642,5 +2736,6 @@ def main():
     <p>Version 2.0 | For authorized use only | Data last updated: {}</p>
     </div>
     """.format(datetime.now().strftime("%Y-%m-%d %H:%M")), unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
