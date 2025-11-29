@@ -355,7 +355,7 @@ class InstitutionalAIAnalyzer:
             # ... rest of your table creation code remains the same ...
         
             self.conn.commit()
-            st.success(f"✅ Database initialized at: {db_path}")
+            #st.success(f"✅ Database initialized at: {db_path}")
         
         except Exception as e:
             st.error(f"❌ Database initialization error: {e}")
