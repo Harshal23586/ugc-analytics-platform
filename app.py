@@ -345,22 +345,9 @@ class InstitutionalAIAnalyzer:
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
-        try:
-            # Use /tmp directory for Streamlit Cloud compatibility
-            db_path = '/tmp/institutions.db'
-            self.conn = sqlite3.connect(db_path, check_same_thread=False)
-            self.conn.row_factory = sqlite3.Row
-            cursor = self.conn.cursor()
-
-            # ... rest of your table creation code remains the same ...
-        
-            self.conn.commit()
-            # st.success(f"✅ Database initialized at: {db_path}")
-        
-        except Exception as e:
-            st.error(f"❌ Database initialization error: {e}")
-            # Fallback to in-memory database
-            self.conn = sqlite3.connect(':memory:', check_same_thread=False)
+        self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        cursor = self.conn.cursor()
 
     
     def create_dummy_system_users(self):
