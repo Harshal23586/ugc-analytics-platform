@@ -2754,8 +2754,10 @@ def main():
             ])
         
         # Common modules for all roles (except Institution)
-        if check_user_access(["Institution"]):
-            create_institution_login(analyzer)
+        if st.session_state.user_role != "Institution":
+            available_modules.extend([
+                "🤖 AI Reports"  # AI Reports is available to Review Committee and Officers
+            ])
             
         
         # Remove duplicates and sort
