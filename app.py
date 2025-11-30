@@ -1376,6 +1376,7 @@ def create_institution_login(analyzer):
                 else:
                     st.error("Username already exists. Please choose a different username.")
 
+# Update the institution dashboard to use the correct function names
 def create_institution_dashboard(analyzer, user):
     if not user:
         st.error("No user data available")
@@ -1395,10 +1396,10 @@ def create_institution_dashboard(analyzer, user):
     with col4:
         st.metric("Role", user.get('role', 'N/A'))
     
-    # Navigation for institution users - UPDATED TO INCLUDE NEW FORM
+    # Navigation for institution users - UPDATED WITH CORRECT FUNCTION NAMES
     institution_tabs = st.tabs([
         "📤 Document Upload", 
-        "📝 Data Submission", 
+        "📝 Basic Data Submission", 
         "🏛️ Systematic Data Form",  # NEW TAB
         "📊 My Submissions",
         "📋 Requirements Guide",
@@ -1409,7 +1410,7 @@ def create_institution_dashboard(analyzer, user):
         create_institution_document_upload(analyzer, user)
     
     with institution_tabs[1]:
-        create_systematic_data_submission_form(analyzer, user)
+        create_institution_data_submission(analyzer, user)  # This is the original function
     
     with institution_tabs[2]:  # NEW TAB FOR SYSTEMATIC DATA FORM
         create_systematic_data_submission_form(analyzer, user)
@@ -2383,7 +2384,7 @@ def create_systematic_data_submission_form(analyzer, user):
             - Accreditation recommendations will be provided
             - You can track the analysis progress in the 'My Submissions' section
             """)
-
+            
 def create_institution_submissions_view(analyzer, user):
     st.subheader("📊 My Submissions & Status")
     
