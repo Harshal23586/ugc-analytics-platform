@@ -2606,25 +2606,49 @@ def create_system_settings(analyzer):
     with col3:
         st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
 
+# Also update the get_available_modules function to return more descriptive names
 def get_available_modules(user_role):
     if user_role == "Institution":
         return ["🏛️ Institution Portal"]
     elif user_role == "System Admin":
         return ["📊 Performance Dashboard", "⚙️ System Settings"]
     elif user_role in ["UGC Officer", "AICTE Officer"]:
-        return ["🔄 Approval Workflow", "💾 Data Management", "🔍 RAG Data Management", "📋 Document Analysis"]
+        return [
+            "🔄 Approval Workflow", 
+            "💾 Data Management", 
+            "🔍 RAG Data Analysis", 
+            "📋 Document Analysis",
+            "🤖 AI Reports",
+            "📊 Performance Dashboard"
+        ]
     elif user_role == "Review Committee":
-        return ["🤖 AI Reports"]
+        return ["🤖 AI Analysis Reports", "📊 Performance Dashboard"]
     else:
         return []
 
-def main():     
+def main():
+    # Add this at the beginning of the main() function or in page configuration
+    st.markdown("""
+    <style>
+        .stButton button {
+            width: 100%;
+            margin: 2px 0px;
+        }
+        .sidebar .stButton button {
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 500;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
     if 'user_role' not in st.session_state:
         st.session_state.user_role = None
     if 'system_user' not in st.session_state:
         st.session_state.system_user = None
+    if 'current_module' not in st.session_state:
+        st.session_state.current_module = None
     
     try:
         analyzer = InstitutionalAIAnalyzer()
@@ -2632,45 +2656,69 @@ def main():
         st.error(f"❌ System initialization error: {str(e)}")
         st.stop()
     
+    # Institution User Dashboard
     if st.session_state.institution_user is not None:
         create_institution_dashboard(analyzer, st.session_state.institution_user)
         if st.sidebar.button("🚪 Logout"):
             st.session_state.institution_user = None
             st.session_state.user_role = None
+            st.session_state.current_module = None
             st.rerun()
         return
     
+    # System User Dashboard
     if st.session_state.system_user is not None:
         user_role = st.session_state.user_role
-        available_modules = get_available_modules(user_role)
         
+        # Simple sidebar navigation without dropdown
         st.sidebar.title(f"🧭 {user_role} Navigation")
         st.sidebar.markdown("---")
         
-        if available_modules:
-            selected_module = st.sidebar.selectbox("Select Module", available_modules)
-            
-            if selected_module == "📊 Performance Dashboard" and user_role == "System Admin":
-                create_performance_dashboard(analyzer)
-            elif selected_module == "⚙️ System Settings" and user_role == "System Admin":
-                create_system_settings(analyzer)
-            elif selected_module == "🔄 Approval Workflow" and user_role in ["UGC Officer", "AICTE Officer"]:
-                create_approval_workflow(analyzer)
-            elif selected_module == "💾 Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
-                create_data_management_module(analyzer)
-            elif selected_module == "🔍 RAG Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
-                create_rag_data_management(analyzer)
-            elif selected_module == "📋 Document Analysis" and user_role in ["UGC Officer", "AICTE Officer"]:
-                create_document_analysis_module(analyzer)
-            elif selected_module == "🤖 AI Reports" and user_role == "Review Committee":
-                create_ai_analysis_reports(analyzer)
+        # Show available modules as buttons
+        available_modules = get_available_modules(user_role)
         
-        if st.sidebar.button("🚪 Logout"):
+        for module in available_modules:
+            if st.sidebar.button(module, use_container_width=True):
+                st.session_state.current_module = module
+                st.rerun()
+        
+        # Show current module
+        if st.session_state.current_module:
+            st.sidebar.success(f"**Current:** {st.session_state.current_module}")
+        else:
+            # Set default module if none selected
+            st.session_state.current_module = available_modules[0]
+            st.rerun()
+        
+        # Logout button
+        st.sidebar.markdown("---")
+        if st.sidebar.button("🚪 Logout", use_container_width=True):
             st.session_state.system_user = None
             st.session_state.user_role = None
+            st.session_state.current_module = None
             st.rerun()
+        
+        # Render the selected module
+        selected_module = st.session_state.current_module
+        
+        if selected_module == "📊 Performance Dashboard" and user_role == "System Admin":
+            create_performance_dashboard(analyzer)
+        elif selected_module == "⚙️ System Settings" and user_role == "System Admin":
+            create_system_settings(analyzer)
+        elif selected_module == "🔄 Approval Workflow" and user_role in ["UGC Officer", "AICTE Officer"]:
+            create_approval_workflow(analyzer)
+        elif selected_module == "💾 Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
+            create_data_management_module(analyzer)
+        elif selected_module == "🔍 RAG Data Management" and user_role in ["UGC Officer", "AICTE Officer"]:
+            create_rag_data_management(analyzer)
+        elif selected_module == "📋 Document Analysis" and user_role in ["UGC Officer", "AICTE Officer"]:
+            create_document_analysis_module(analyzer)
+        elif selected_module == "🤖 AI Reports" and user_role == "Review Committee":
+            create_ai_analysis_reports(analyzer)
+        
         return
     
+    # Login Page
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
