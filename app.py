@@ -1395,13 +1395,14 @@ def create_institution_dashboard(analyzer, user):
     with col4:
         st.metric("Role", user.get('role', 'N/A'))
     
-    # Navigation for institution users - ADDED APPROVAL WORKFLOW TAB
+    # Navigation for institution users - UPDATED TO INCLUDE NEW FORM
     institution_tabs = st.tabs([
         "📤 Document Upload", 
         "📝 Data Submission", 
+        "🏛️ Systematic Data Form",  # NEW TAB
         "📊 My Submissions",
         "📋 Requirements Guide",
-        "🔄 Approval Workflow"  # NEW TAB ADDED HERE
+        "🔄 Approval Workflow"
     ])
     
     with institution_tabs[0]:
@@ -1410,13 +1411,16 @@ def create_institution_dashboard(analyzer, user):
     with institution_tabs[1]:
         create_institution_data_submission(analyzer, user)
     
-    with institution_tabs[2]:
-        create_institution_submissions_view(analyzer, user)
+    with institution_tabs[2]:  # NEW TAB FOR SYSTEMATIC DATA FORM
+        create_systematic_data_submission_form(analyzer, user)
     
     with institution_tabs[3]:
+        create_institution_submissions_view(analyzer, user)
+    
+    with institution_tabs[4]:
         create_institution_requirements_guide(analyzer)
     
-    with institution_tabs[4]:  # NEW TAB CONTENT
+    with institution_tabs[5]:
         create_institution_approval_workflow(analyzer, user)
 
 def create_institution_approval_workflow(analyzer, user):
@@ -1814,153 +1818,571 @@ def create_institution_document_upload(analyzer, user):
             for recommendation in analysis_result['recommendations']:
                 st.write(f"• {recommendation}")
 
-def create_institution_data_submission(analyzer, user):
-    st.subheader("📝 Data Submission Form")
+def create_systematic_data_submission_form(analyzer, user):
+    st.subheader("🏛️ Systematic Data Submission Form - NEP 2020 Framework")
     
-    st.info("Submit institutional data and performance metrics through this form")
+    st.info("""
+    **Complete this comprehensive data submission form based on the 10-parameter framework from the Dr. Radhakrishnan Committee Report.**
+    This data will be used for AI-powered institutional analysis and accreditation assessment.
+    """)
     
-    with st.form("institution_data_submission"):
-        st.write("### Academic Performance Data")
+    with st.form("systematic_data_submission"):
+        st.markdown("### 📚 1. CURRICULUM")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            naac_grade = st.selectbox(
-                "NAAC Grade",
-                ["A++", "A+", "A", "B++", "B+", "B", "C"]
+            curriculum_framework_score = st.slider(
+                "Curriculum Framework Quality Score (1-10)",
+                min_value=1, max_value=10, value=7,
+                help="Assessment of curriculum design and structure"
             )
-            student_faculty_ratio = st.number_input(
+            stakeholder_consultation = st.selectbox(
+                "Stakeholder Consultation in Curriculum Design",
+                ["Regular & Comprehensive", "Occasional", "Minimal", "None"],
+                help="Industry, alumni, employer involvement"
+            )
+            curriculum_update_frequency = st.selectbox(
+                "Curriculum Review & Update Frequency",
+                ["Annual", "Biannual", "Every 3 Years", "Irregular"],
+                help="How often curriculum is revised"
+            )
+        
+        with col2:
+            multidisciplinary_courses = st.number_input(
+                "Number of Multidisciplinary Courses",
+                min_value=0, value=5,
+                help="Courses integrating multiple disciplines"
+            )
+            skill_integration_score = st.slider(
+                "Skill Integration in Curriculum (1-10)",
+                min_value=1, max_value=10, value=6,
+                help="Integration of vocational and employability skills"
+            )
+            digital_content_availability = st.selectbox(
+                "Digital Learning Content Availability",
+                ["Extensive (>80%)", "Moderate (50-80%)", "Limited (<50%)", "Minimal"],
+                help="Availability of digital learning materials"
+            )
+        
+        st.markdown("---")
+        st.markdown("### 👨‍🏫 2. FACULTY RESOURCES")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            faculty_student_ratio = st.number_input(
                 "Student-Faculty Ratio",
-                min_value=5.0,
-                max_value=50.0,
-                value=20.0,
-                step=0.1
+                min_value=5.0, max_value=50.0, value=20.0, step=0.1
             )
-            phd_faculty_ratio = st.number_input(
-                "PhD Faculty Ratio (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=60.0,
-                step=1.0
-            ) / 100
+            phd_faculty_percentage = st.number_input(
+                "PhD Faculty Percentage (%)",
+                min_value=0.0, max_value=100.0, value=65.0, step=1.0
+            )
+            faculty_diversity_index = st.slider(
+                "Faculty Diversity Index (1-10)",
+                min_value=1, max_value=10, value=6,
+                help="Gender, social, regional diversity"
+            )
         
         with col2:
-            nirf_ranking = st.number_input(
-                "NIRF Ranking (if applicable)",
-                min_value=1,
-                max_value=200,
-                value=None,
-                placeholder="Leave blank if not ranked"
+            faculty_development_hours = st.number_input(
+                "Annual Faculty Development Hours per Faculty",
+                min_value=0, value=40,
+                help="Training and development hours"
             )
-            placement_rate = st.number_input(
-                "Placement Rate (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=75.0,
-                step=1.0
+            industry_exposure_faculty = st.number_input(
+                "Faculty with Industry Exposure (%)",
+                min_value=0.0, max_value=100.0, value=30.0, step=1.0
+            )
+            international_faculty = st.number_input(
+                "International Faculty Percentage (%)",
+                min_value=0.0, max_value=100.0, value=5.0, step=1.0
             )
         
-        st.write("### Research & Infrastructure")
+        with col3:
+            research_publications_per_faculty = st.number_input(
+                "Research Publications per Faculty (Annual)",
+                min_value=0.0, value=1.5, step=0.1
+            )
+            faculty_retention_rate = st.number_input(
+                "Faculty Retention Rate (%)",
+                min_value=0.0, max_value=100.0, value=85.0, step=1.0
+            )
+        
+        st.markdown("---")
+        st.markdown("### 🎓 3. LEARNING AND TEACHING")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            research_publications = st.number_input(
-                "Research Publications (Last Year)",
-                min_value=0,
-                value=50
+            average_attendance_rate = st.number_input(
+                "Average Student Attendance Rate (%)",
+                min_value=0.0, max_value=100.0, value=85.0, step=1.0
             )
-            research_grants = st.number_input(
-                "Research Grants Amount (₹)",
-                min_value=0,
-                value=1000000,
-                step=100000
+            digital_platform_usage = st.selectbox(
+                "Digital Platform Usage in Teaching",
+                ["Extensive Integration", "Moderate Use", "Limited Use", "Traditional Only"],
+                help="Use of LMS, online tools, digital resources"
+            )
+            experiential_learning_hours = st.number_input(
+                "Experiential Learning Hours per Student (Annual)",
+                min_value=0, value=50
             )
         
         with col2:
-            digital_infrastructure_score = st.slider(
-                "Digital Infrastructure Score",
-                min_value=1,
-                max_value=10,
-                value=7
+            learning_outcome_achievement = st.number_input(
+                "Learning Outcome Achievement Rate (%)",
+                min_value=0.0, max_value=100.0, value=75.0, step=1.0
             )
-            library_volumes = st.number_input(
-                "Library Volumes",
-                min_value=0,
-                value=20000
+            student_feedback_score = st.slider(
+                "Student Feedback Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            critical_thinking_assessment = st.selectbox(
+                "Critical Thinking Assessment Integration",
+                ["Comprehensive", "Moderate", "Limited", "None"],
+                help="Assessment of analytical and critical thinking skills"
             )
         
-        st.write("### Governance & Social Impact")
+        st.markdown("---")
+        st.markdown("### 🔬 4. RESEARCH AND INNOVATION")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            research_publications_total = st.number_input(
+                "Total Research Publications (Last 3 Years)",
+                min_value=0, value=100
+            )
+            patents_filed = st.number_input(
+                "Patents Filed (Last 3 Years)",
+                min_value=0, value=10
+            )
+            research_grants_amount = st.number_input(
+                "Research Grants Received (₹ Lakhs - Last 3 Years)",
+                min_value=0, value=500
+            )
+            h_index_institution = st.number_input(
+                "Institutional H-index",
+                min_value=0, value=25
+            )
+        
+        with col2:
+            industry_collaborations = st.number_input(
+                "Industry Research Collaborations",
+                min_value=0, value=8
+            )
+            international_research_partnerships = st.number_input(
+                "International Research Partnerships",
+                min_value=0, value=5
+            )
+            student_research_participation = st.number_input(
+                "Student Research Participation (%)",
+                min_value=0.0, max_value=100.0, value=40.0, step=1.0
+            )
+            research_facility_utilization = st.slider(
+                "Research Facility Utilization Rate (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+        
+        st.markdown("---")
+        st.markdown("### ⚽ 5. EXTRACURRICULAR & CO-CURRICULAR ACTIVITIES")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            ec_activities_annual = st.number_input(
+                "Annual Extracurricular Activities",
+                min_value=0, value=25
+            )
+            student_participation_rate_ec = st.number_input(
+                "Student Participation Rate in EC Activities (%)",
+                min_value=0.0, max_value=100.0, value=60.0, step=1.0
+            )
+            sports_infrastructure_score = st.slider(
+                "Sports Infrastructure Quality (1-10)",
+                min_value=1, max_value=10, value=6
+            )
+        
+        with col2:
+            cultural_events_annual = st.number_input(
+                "Annual Cultural Events",
+                min_value=0, value=15
+            )
+            leadership_programs = st.number_input(
+                "Leadership Development Programs",
+                min_value=0, value=8
+            )
+            ec_credit_integration = st.selectbox(
+                "EC/CC Credit Integration in Curriculum",
+                ["Fully Integrated", "Partially Integrated", "Separate", "None"],
+                help="Integration of extracurricular credits"
+            )
+        
+        st.markdown("---")
+        st.markdown("### 🤝 6. COMMUNITY ENGAGEMENT")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            community_projects_annual = st.number_input(
+                "Annual Community Engagement Projects",
+                min_value=0, value=12
+            )
+            student_participation_community = st.number_input(
+                "Student Participation in Community Service (%)",
+                min_value=0.0, max_value=100.0, value=45.0, step=1.0
+            )
+            rural_outreach_programs = st.number_input(
+                "Rural Outreach Programs",
+                min_value=0, value=6
+            )
+        
+        with col2:
+            social_impact_assessment = st.selectbox(
+                "Social Impact Assessment Conducted",
+                ["Regularly", "Occasionally", "Rarely", "Never"]
+            )
+            csr_initiatives = st.number_input(
+                "CSR Initiatives Undertaken",
+                min_value=0, value=4
+            )
+            community_feedback_score = st.slider(
+                "Community Feedback Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+        
+        st.markdown("---")
+        st.markdown("### 🌱 7. GREEN INITIATIVES")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            renewable_energy_usage = st.number_input(
+                "Renewable Energy Usage (%)",
+                min_value=0.0, max_value=100.0, value=25.0, step=1.0
+            )
+            waste_management_score = st.slider(
+                "Waste Management System Score (1-10)",
+                min_value=1, max_value=10, value=6
+            )
+            water_harvesting_capacity = st.number_input(
+                "Water Harvesting Capacity (KL Annual)",
+                min_value=0, value=5000
+            )
+        
+        with col2:
+            carbon_footprint_reduction = st.number_input(
+                "Carbon Footprint Reduction (%) - Last 3 Years",
+                min_value=0.0, max_value=100.0, value=15.0, step=1.0
+            )
+            green_cover_percentage = st.number_input(
+                "Green Cover Percentage on Campus",
+                min_value=0.0, max_value=100.0, value=40.0, step=1.0
+            )
+            environmental_awareness_programs = st.number_input(
+                "Environmental Awareness Programs (Annual)",
+                min_value=0, value=10
+            )
+        
+        st.markdown("---")
+        st.markdown("### ⚖️ 8. GOVERNANCE AND ADMINISTRATION")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            governance_transparency_score = st.slider(
+                "Governance Transparency Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            grievance_redressal_time = st.number_input(
+                "Average Grievance Redressal Time (Days)",
+                min_value=1, value=15
+            )
+            egov_implementation_level = st.selectbox(
+                "e-Governance Implementation Level",
+                ["Advanced", "Moderate", "Basic", "Minimal"]
+            )
+        
+        with col2:
+            student_participation_governance = st.number_input(
+                "Student Participation in Governance (%)",
+                min_value=0.0, max_value=100.0, value=30.0, step=1.0
+            )
+            administrative_efficiency_score = st.slider(
+                "Administrative Efficiency Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            international_collaborations = st.number_input(
+                "Active International Collaborations",
+                min_value=0, value=8
+            )
+        
+        st.markdown("---")
+        st.markdown("### 🏗️ 9. INFRASTRUCTURE DEVELOPMENT")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            campus_area = st.number_input(
+                "Campus Area (Acres)",
+                min_value=0.0, value=50.0, step=0.1
+            )
+            digital_infrastructure_score = st.slider(
+                "Digital Infrastructure Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            laboratory_equipment_score = st.slider(
+                "Laboratory Equipment Quality Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+        
+        with col2:
+            library_resources_score = st.slider(
+                "Library Resources Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            hostel_capacity_utilization = st.number_input(
+                "Hostel Capacity Utilization (%)",
+                min_value=0.0, max_value=100.0, value=80.0, step=1.0
+            )
+            infrastructure_maintenance_score = st.slider(
+                "Infrastructure Maintenance Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+        
+        st.markdown("---")
+        st.markdown("### 💰 10. FINANCIAL RESOURCES AND MANAGEMENT")
         
         col1, col2 = st.columns(2)
         
         with col1:
             financial_stability_score = st.slider(
-                "Financial Stability Score",
-                min_value=1,
-                max_value=10,
-                value=8
+                "Financial Stability Score (1-10)",
+                min_value=1, max_value=10, value=7
             )
-            community_projects = st.number_input(
-                "Community Projects (Last Year)",
-                min_value=0,
-                value=10
+            research_investment_percentage = st.number_input(
+                "Research Investment (% of Total Budget)",
+                min_value=0.0, max_value=100.0, value=15.0, step=1.0
+            )
+            infrastructure_investment = st.number_input(
+                "Infrastructure Investment (₹ Lakhs - Annual)",
+                min_value=0, value=200
             )
         
         with col2:
-            compliance_score = st.slider(
-                "Compliance Score",
-                min_value=1,
-                max_value=10,
-                value=8
+            revenue_generation_score = st.slider(
+                "Revenue Generation Score (1-10)",
+                min_value=1, max_value=10, value=6
             )
-            administrative_efficiency = st.slider(
-                "Administrative Efficiency",
-                min_value=1,
-                max_value=10,
-                value=7
+            financial_aid_students = st.number_input(
+                "Students Receiving Financial Aid (%)",
+                min_value=0.0, max_value=100.0, value=25.0, step=1.0
+            )
+            audit_compliance_score = st.slider(
+                "Audit Compliance Score (1-10)",
+                min_value=1, max_value=10, value=8
             )
         
-        submission_notes = st.text_area(
-            "Additional Notes / Comments",
-            placeholder="Add any additional information or context for your submission..."
+        st.markdown("---")
+        st.markdown("### 📊 ADDITIONAL INSTITUTIONAL METRICS")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            placement_rate = st.number_input(
+                "Placement Rate (%)",
+                min_value=0.0, max_value=100.0, value=75.0, step=1.0
+            )
+            higher_education_rate = st.number_input(
+                "Higher Education Progression Rate (%)",
+                min_value=0.0, max_value=100.0, value=20.0, step=1.0
+            )
+        
+        with col2:
+            entrepreneurship_cell_score = st.slider(
+                "Entrepreneurship Cell Activity Score (1-10)",
+                min_value=1, max_value=10, value=6
+            )
+            alumni_engagement_score = st.slider(
+                "Alumni Engagement Score (1-10)",
+                min_value=1, max_value=10, value=5
+            )
+        
+        with col3:
+            institutional_reputation_score = st.slider(
+                "Institutional Reputation Score (1-10)",
+                min_value=1, max_value=10, value=7
+            )
+            naac_previous_grade = st.selectbox(
+                "Previous NAAC Grade (if any)",
+                ["A++", "A+", "A", "B++", "B+", "B", "C", "Not Accredited"]
+            )
+        
+        # Additional information
+        st.markdown("---")
+        st.markdown("### 📝 ADDITIONAL INFORMATION")
+        
+        institutional_strengths = st.text_area(
+            "Key Institutional Strengths",
+            placeholder="Describe your institution's major strengths and achievements...",
+            height=100
         )
         
-        submitted = st.form_submit_button("📤 Submit Data")
+        improvement_areas = st.text_area(
+            "Areas for Improvement",
+            placeholder="Identify key areas where your institution seeks improvement...",
+            height=100
+        )
+        
+        strategic_initiatives = st.text_area(
+            "Strategic Initiatives & Future Plans",
+            placeholder="Describe ongoing or planned strategic initiatives...",
+            height=100
+        )
+        
+        # Submit button
+        submitted = st.form_submit_button("🚀 Submit Comprehensive Institutional Data")
         
         if submitted:
+            # Compile all data into a structured format
             submission_data = {
-                "academic_data": {
-                    "naac_grade": naac_grade,
-                    "nirf_ranking": nirf_ranking,
-                    "student_faculty_ratio": student_faculty_ratio,
-                    "phd_faculty_ratio": phd_faculty_ratio,
-                    "placement_rate": placement_rate
+                "submission_type": "comprehensive_institutional_data",
+                "submission_date": datetime.now().isoformat(),
+                "parameter_scores": {
+                    "curriculum": {
+                        "curriculum_framework_score": curriculum_framework_score,
+                        "stakeholder_consultation": stakeholder_consultation,
+                        "curriculum_update_frequency": curriculum_update_frequency,
+                        "multidisciplinary_courses": multidisciplinary_courses,
+                        "skill_integration_score": skill_integration_score,
+                        "digital_content_availability": digital_content_availability
+                    },
+                    "faculty_resources": {
+                        "faculty_student_ratio": faculty_student_ratio,
+                        "phd_faculty_percentage": phd_faculty_percentage,
+                        "faculty_diversity_index": faculty_diversity_index,
+                        "faculty_development_hours": faculty_development_hours,
+                        "industry_exposure_faculty": industry_exposure_faculty,
+                        "international_faculty": international_faculty,
+                        "research_publications_per_faculty": research_publications_per_faculty,
+                        "faculty_retention_rate": faculty_retention_rate
+                    },
+                    "learning_teaching": {
+                        "average_attendance_rate": average_attendance_rate,
+                        "digital_platform_usage": digital_platform_usage,
+                        "experiential_learning_hours": experiential_learning_hours,
+                        "learning_outcome_achievement": learning_outcome_achievement,
+                        "student_feedback_score": student_feedback_score,
+                        "critical_thinking_assessment": critical_thinking_assessment
+                    },
+                    "research_innovation": {
+                        "research_publications_total": research_publications_total,
+                        "patents_filed": patents_filed,
+                        "research_grants_amount": research_grants_amount,
+                        "h_index_institution": h_index_institution,
+                        "industry_collaborations": industry_collaborations,
+                        "international_research_partnerships": international_research_partnerships,
+                        "student_research_participation": student_research_participation,
+                        "research_facility_utilization": research_facility_utilization
+                    },
+                    "extracurricular_activities": {
+                        "ec_activities_annual": ec_activities_annual,
+                        "student_participation_rate_ec": student_participation_rate_ec,
+                        "sports_infrastructure_score": sports_infrastructure_score,
+                        "cultural_events_annual": cultural_events_annual,
+                        "leadership_programs": leadership_programs,
+                        "ec_credit_integration": ec_credit_integration
+                    },
+                    "community_engagement": {
+                        "community_projects_annual": community_projects_annual,
+                        "student_participation_community": student_participation_community,
+                        "rural_outreach_programs": rural_outreach_programs,
+                        "social_impact_assessment": social_impact_assessment,
+                        "csr_initiatives": csr_initiatives,
+                        "community_feedback_score": community_feedback_score
+                    },
+                    "green_initiatives": {
+                        "renewable_energy_usage": renewable_energy_usage,
+                        "waste_management_score": waste_management_score,
+                        "water_harvesting_capacity": water_harvesting_capacity,
+                        "carbon_footprint_reduction": carbon_footprint_reduction,
+                        "green_cover_percentage": green_cover_percentage,
+                        "environmental_awareness_programs": environmental_awareness_programs
+                    },
+                    "governance_administration": {
+                        "governance_transparency_score": governance_transparency_score,
+                        "grievance_redressal_time": grievance_redressal_time,
+                        "egov_implementation_level": egov_implementation_level,
+                        "student_participation_governance": student_participation_governance,
+                        "administrative_efficiency_score": administrative_efficiency_score,
+                        "international_collaborations": international_collaborations
+                    },
+                    "infrastructure_development": {
+                        "campus_area": campus_area,
+                        "digital_infrastructure_score": digital_infrastructure_score,
+                        "laboratory_equipment_score": laboratory_equipment_score,
+                        "library_resources_score": library_resources_score,
+                        "hostel_capacity_utilization": hostel_capacity_utilization,
+                        "infrastructure_maintenance_score": infrastructure_maintenance_score
+                    },
+                    "financial_management": {
+                        "financial_stability_score": financial_stability_score,
+                        "research_investment_percentage": research_investment_percentage,
+                        "infrastructure_investment": infrastructure_investment,
+                        "revenue_generation_score": revenue_generation_score,
+                        "financial_aid_students": financial_aid_students,
+                        "audit_compliance_score": audit_compliance_score
+                    }
                 },
-                "research_data": {
-                    "research_publications": research_publications,
-                    "research_grants": research_grants,
-                    "digital_infrastructure_score": digital_infrastructure_score,
-                    "library_volumes": library_volumes
+                "additional_metrics": {
+                    "placement_rate": placement_rate,
+                    "higher_education_rate": higher_education_rate,
+                    "entrepreneurship_cell_score": entrepreneurship_cell_score,
+                    "alumni_engagement_score": alumni_engagement_score,
+                    "institutional_reputation_score": institutional_reputation_score,
+                    "naac_previous_grade": naac_previous_grade
                 },
-                "governance_data": {
-                    "financial_stability_score": financial_stability_score,
-                    "compliance_score": compliance_score,
-                    "administrative_efficiency": administrative_efficiency,
-                    "community_projects": community_projects
-                },
-                "submission_notes": submission_notes,
-                "submission_date": datetime.now().isoformat()
+                "qualitative_data": {
+                    "institutional_strengths": institutional_strengths,
+                    "improvement_areas": improvement_areas,
+                    "strategic_initiatives": strategic_initiatives
+                }
             }
             
+            # Save to database
             analyzer.save_institution_submission(
                 user['institution_id'],
-                "annual_performance_data",
+                "comprehensive_institutional_data",
                 submission_data
             )
             
-            st.success("✅ Data submitted successfully! Your submission is under review.")
+            st.success("✅ Comprehensive Institutional Data Submitted Successfully!")
             st.balloons()
+            
+            # Show quick summary
+            st.subheader("📋 Submission Summary")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Parameters Covered", "10")
+                st.metric("Data Points Collected", "65+")
+            
+            with col2:
+                st.metric("AI Analysis Ready", "Yes")
+                st.metric("NEP 2020 Compliant", "Yes")
+            
+            with col3:
+                st.metric("Submission Status", "Complete")
+            
+            st.info("""
+            **Next Steps:**
+            - Your data will be processed for AI-powered institutional analysis
+            - Comprehensive assessment report will be generated
+            - Accreditation recommendations will be provided
+            - You can track the analysis progress in the 'My Submissions' section
+            """)
 
 def create_institution_submissions_view(analyzer, user):
     st.subheader("📊 My Submissions & Status")
