@@ -526,42 +526,42 @@ class InstitutionalAIAnalyzer:
         return hashlib.sha256(password.encode()).hexdigest()
 
     def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
-    """Analyze uploaded documents using RAG and extract structured data"""
-    try:
-        # Check if we have files to process
-        if not uploaded_files:
-            return self.get_default_analysis_result(uploaded_files)
+        """Analyze uploaded documents using RAG and extract structured data"""
+        try:
+            # Check if we have files to process
+            if not uploaded_files:
+                return self.get_default_analysis_result(uploaded_files)
         
-        # Extract data using RAG
-        extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
+            # Extract data using RAG
+            extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
     
-        # Ensure extracted_data has all required keys
-        if not extracted_data:
-            extracted_data = self.get_default_analysis_result(uploaded_files)
+            # Ensure extracted_data has all required keys
+            if not extracted_data:
+                extracted_data = self.get_default_analysis_result(uploaded_files)
     
-        # Save extracted data to database
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT INTO rag_analysis 
-            (institution_id, analysis_type, extracted_data, confidence_score)
-            VALUES (?, ?, ?, ?)
-        ''', (institution_id, 'document_analysis', json.dumps(extracted_data), 0.85))
+            # Save extracted data to database
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                INSERT INTO rag_analysis 
+                (institution_id, analysis_type, extracted_data, confidence_score)
+                VALUES (?, ?, ?, ?)
+            ''', (institution_id, 'document_analysis', json.dumps(extracted_data), 0.85))
     
-        self.conn.commit()
+            self.conn.commit()
     
-        # Generate AI insights
-        ai_insights = self.generate_ai_insights(extracted_data)
+            # Generate AI insights
+            ai_insights = self.generate_ai_insights(extracted_data)
     
-        return {
-            'extracted_data': extracted_data,
-            'ai_insights': ai_insights,
-            'confidence_score': 0.85,
-            'status': 'Analysis Complete'
-        }
+            return {
+                'extracted_data': extracted_data,
+                'ai_insights': ai_insights,
+                'confidence_score': 0.85,
+                'status': 'Analysis Complete'
+            }
     
-    except Exception as e:
-        st.error(f"Error in RAG analysis: {str(e)}")
-        return self.get_default_analysis_result(uploaded_files)
+        except Exception as e:
+            st.error(f"Error in RAG analysis: {str(e)}")
+            return self.get_default_analysis_result(uploaded_files)
 
     def get_default_analysis_result(self, uploaded_files: List) -> Dict[str, Any]:
         """Return a safe default structure when analysis fails"""
