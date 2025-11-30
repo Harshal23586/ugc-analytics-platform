@@ -3432,7 +3432,12 @@ def generate_comprehensive_dummy_data():
             naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
             naac_grade = np.random.choice(naac_grades, p=naac_probs)
             
-            nirf_rank = np.random.choice(list(range(1, 201)) + [None] * 50, p=[0.005] * 200 + [0.01] * 50)
+            # SIMPLIFIED: NIRF ranking - 60% have ranking, 40% don't
+            if np.random.random() < 0.6:
+                nirf_rank = np.random.randint(1, 201)
+            else:
+                nirf_rank = None
+            
             student_faculty_ratio = max(10, np.random.normal(20, 5))
             phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
             placement_rate = max(40, min(98, np.random.normal(75, 10)))
@@ -3470,7 +3475,7 @@ def generate_comprehensive_dummy_data():
             
             institution_data = {
                 'institution_id': f'INST_{inst_id:04d}',
-                'institution_name': f'{inst_type.split()[0]} {inst_id:03d}',
+                'institution_name': f'{inst_type.split()[0]} University {inst_id:03d}',
                 'year': year,
                 'institution_type': inst_type,
                 'state': state,
