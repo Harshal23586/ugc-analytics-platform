@@ -1356,16 +1356,7 @@ def main():
     # Main authentication page with enhanced UI
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
-    
-    # Authentication tabs
-    auth_tabs = st.tabs(["🏛️ Institution Login", "🔐 System Login"])
-    
-    with auth_tabs[0]:
-        create_institution_login(analyzer)
-    
-    with auth_tabs[1]:
-        create_system_login(analyzer)
-    
+
     # System overview with enhanced styling
     st.markdown("---")
     col1, col2 = st.columns([2, 1])
@@ -1411,6 +1402,15 @@ def main():
         if len(current_year_data) > 0:
             approval_ready = (current_year_data['performance_score'] >= 6.0).sum()
             st.metric("Approval Ready", approval_ready)
+    # Authentication tabs
+    auth_tabs = st.tabs(["🏛️ Institution Login", "🔐 System Login"])
+    
+    with auth_tabs[0]:
+        create_institution_login(analyzer)
+    
+    with auth_tabs[1]:
+        create_system_login(analyzer)
+    
     
     # Footer
     st.markdown("---")
