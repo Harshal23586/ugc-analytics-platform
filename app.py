@@ -1395,12 +1395,13 @@ def create_institution_dashboard(analyzer, user):
     with col4:
         st.metric("Role", user.get('role', 'N/A'))
     
-    # Navigation for institution users
+    # Navigation for institution users - ADDED APPROVAL WORKFLOW TAB
     institution_tabs = st.tabs([
         "📤 Document Upload", 
         "📝 Data Submission", 
         "📊 My Submissions",
-        "📋 Requirements Guide"
+        "📋 Requirements Guide",
+        "🔄 Approval Workflow"  # NEW TAB ADDED HERE
     ])
     
     with institution_tabs[0]:
@@ -1414,6 +1415,117 @@ def create_institution_dashboard(analyzer, user):
     
     with institution_tabs[3]:
         create_institution_requirements_guide(analyzer)
+    
+    with institution_tabs[4]:  # NEW TAB CONTENT
+        create_institution_approval_workflow(analyzer, user)
+
+def create_institution_approval_workflow(analyzer, user):
+    st.subheader("🔄 Institution Approval Workflow")
+    
+    st.info("Track your approval application status and follow the workflow steps")
+    
+    # Show current submission status
+    submissions = analyzer.get_institution_submissions(user['institution_id'])
+    
+    if len(submissions) > 0:
+        latest_submission = submissions.iloc[0]
+        
+        st.subheader("📋 Current Application Status")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            status = latest_submission['status']
+            if status == 'Under Review':
+                st.warning(f"**Status:** {status}")
+            elif status == 'Approved':
+                st.success(f"**Status:** {status}")
+            elif status == 'Rejected':
+                st.error(f"**Status:** {status}")
+            else:
+                st.info(f"**Status:** {status}")
+        
+        with col2:
+            st.write(f"**Submission Date:** {latest_submission['submitted_date']}")
+        
+        with col3:
+            if latest_submission['reviewed_by']:
+                st.write(f"**Reviewed by:** {latest_submission['reviewed_by']}")
+    
+    else:
+        st.info("No submissions found. Submit your data to start the approval process.")
+    
+    # Workflow steps for institutions
+    st.subheader("📝 Approval Process Steps")
+    
+    workflow_steps = [
+        {
+            "step": 1,
+            "title": "Document Submission",
+            "description": "Upload all required documents through the Document Upload portal",
+            "status": "Complete" if len(submissions) > 0 else "Pending",
+            "action": "Go to Document Upload tab"
+        },
+        {
+            "step": 2,
+            "title": "Data Submission",
+            "description": "Submit institutional performance data through Data Submission form",
+            "status": "Complete" if len(submissions) > 0 else "Pending", 
+            "action": "Go to Data Submission tab"
+        },
+        {
+            "step": 3,
+            "title": "AI Analysis & Verification",
+            "description": "System automatically analyzes documents and data for completeness",
+            "status": "In Progress" if len(submissions) > 0 else "Pending",
+            "action": "Automatic Process"
+        },
+        {
+            "step": 4,
+            "title": "Committee Review",
+            "description": "UGC/AICTE committee reviews AI recommendations and documents",
+            "status": "Pending",
+            "action": "Under Committee Review"
+        },
+        {
+            "step": 5,
+            "title": "Final Decision",
+            "description": "Receive final approval decision with conditions and timeline",
+            "status": "Pending",
+            "action": "Awaiting Decision"
+        }
+    ]
+    
+    for step in workflow_steps:
+        with st.expander(f"Step {step['step']}: {step['title']} - {step['status']}"):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"**Description:** {step['description']}")
+                st.write(f"**Status:** {step['status']}")
+            with col2:
+                if step['status'] == "Pending":
+                    st.button(step['action'], key=f"step_{step['step']}", disabled=True)
+                else:
+                    st.button(step['action'], key=f"step_{step['step']}")
+    
+    # Quick actions for institutions
+    st.subheader("🚀 Quick Actions")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📤 Upload Missing Documents", type="secondary"):
+            st.session_state.active_tab = "Document Upload"
+            st.rerun()
+    
+    with col2:
+        if st.button("📝 Update Submission Data", type="secondary"):
+            st.session_state.active_tab = "Data Submission" 
+            st.rerun()
+    
+    with col3:
+        if st.button("📞 Contact Support", type="secondary"):
+            st.info("Please contact UGC/AICTE support at: support@ugc.gov.in")
 
 def create_institution_document_upload(analyzer, user):
     st.subheader("📤 Document Upload Portal")
@@ -2562,7 +2674,7 @@ def main():
         else:
             st.metric("Approval Ready", "N/A")
     
-    # SINGLE sidebar navigation section
+    # SINGLE sidebar navigation section - REMOVE APPROVAL WORKFLOW FOR NON-INSTITUTION ROLES
     st.sidebar.title("🧭 Navigation Panel")
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔐 Authentication")
@@ -2576,7 +2688,7 @@ def main():
         create_institution_login(analyzer)
         return
     
-    # For other roles, show the AI modules
+    # For other roles, show the AI modules (WITHOUT APPROVAL WORKFLOW)
     st.sidebar.markdown("### AI Modules")
     
     app_mode = st.sidebar.selectbox(
@@ -2587,7 +2699,7 @@ def main():
             "🤖 AI Reports",
             "🔍 RAG Data Management",
             "💾 Data Management",
-            "🔄 Approval Workflow",
+            # "🔄 Approval Workflow",  # REMOVED FROM THIS LIST
             "⚙️ System Settings"
         ]
     )
@@ -2607,9 +2719,6 @@ def main():
     
     elif app_mode == "💾 Data Management":
         create_data_management_module(analyzer)
-    
-    elif app_mode == "🔄 Approval Workflow":
-        create_approval_workflow(analyzer)
     
     elif app_mode == "⚙️ System Settings":
         st.header("⚙️ System Settings & Configuration")
