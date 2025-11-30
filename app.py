@@ -188,41 +188,58 @@ class RAGDataExtractor:
     
     def extract_structured_data(self, text: str) -> Dict[str, Any]:
         data = {
-            'academic_metrics': {},
-            'research_metrics': {},
-            'infrastructure_metrics': {},
+            'curriculum_metrics': {},
+            'faculty_metrics': {},
+            'learning_teaching_metrics': {},
+            'research_innovation_metrics': {},
+            'community_engagement_metrics': {},
+            'green_initiatives_metrics': {},
             'governance_metrics': {},
-            'student_metrics': {},
+            'infrastructure_metrics': {},
             'financial_metrics': {}
         }
-        
-        academic_patterns = {
-            'naac_grade': r'NAAC\s*(?:grade|accreditation|score)[:\s]*([A+]+)',
-            'nirf_ranking': r'NIRF\s*(?:rank|ranking)[:\s]*(\d+)',
-            'student_faculty_ratio': r'(?:student|student-faculty)\s*(?:ratio|ratio:)[:\s]*(\d+(?:\.\d+)?)',
-            'phd_faculty_ratio': r'PhD\s*(?:faculty|faculty ratio)[:\s]*(\d+(?:\.\d+)?)%?',
-            'placement_rate': r'placement\s*(?:rate|percentage)[:\s]*(\d+(?:\.\d+)?)%?'
+    
+        # Curriculum patterns
+        curriculum_patterns = {
+            'curriculum_innovation_score': r'curriculum.*innovation.*score[:\s]*(\d+(?:\.\d+)?)',
+            'student_feedback_score': r'student.*feedback.*score[:\s]*(\d+(?:\.\d+)?)',
+            'stakeholder_involvement_score': r'stakeholder.*involvement.*score[:\s]*(\d+(?:\.\d+)?)',
+            'multidisciplinary_courses': r'multidisciplinary.*courses[:\s]*(\d+)'
         }
-        
+    
+        # Faculty patterns
+        faculty_patterns = {
+            'faculty_selection_transparency': r'faculty.*selection.*transparency[:\s]*(\d+(?:\.\d+)?)',
+            'faculty_diversity_index': r'faculty.*diversity.*index[:\s]*(\d+(?:\.\d+)?)',
+            'continuous_professional_dev': r'continuous.*professional.*development[:\s]*(\d+(?:\.\d+)?)'
+        }
+    
+        # Research patterns
         research_patterns = {
-            'research_publications': r'research\s*(?:publications|papers)[:\s]*(\d+)',
-            'research_grants': r'research\s*(?:grants|funding)[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)',
-            'patents_filed': r'patents?\s*(?:filed|granted)[:\s]*(\d+)',
-            'industry_collaborations': r'industry\s*(?:collaborations|partnerships)[:\s]*(\d+)'
+            'research_publications': r'research.*publications[:\s]*(\d+)',
+            'patents_filed': r'patents.*filed[:\s]*(\d+)',
+            'industry_collaboration_score': r'industry.*collaboration.*score[:\s]*(\d+(?:\.\d+)?)',
+            'translational_research_score': r'translational.*research.*score[:\s]*(\d+(?:\.\d+)?)'
         }
-        
-        for key, pattern in academic_patterns.items():
+    
+        # Extract data for each category
+        for key, pattern in curriculum_patterns.items():
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                data['academic_metrics'][key] = match.group(1)
-        
+                data['curriculum_metrics'][key] = match.group(1)
+    
+        for key, pattern in faculty_patterns.items():
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                data['faculty_metrics'][key] = match.group(1)
+    
         for key, pattern in research_patterns.items():
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                data['research_metrics'][key] = match.group(1)
-        
+                data['research_innovation_metrics'][key] = match.group(1)
+    
         self.extract_contextual_data(text, data)
-        
+    
         return data
     
     def extract_contextual_data(self, text: str, data: Dict):
@@ -518,32 +535,33 @@ class InstitutionalAIAnalyzer:
         
         self.conn.commit()
 
+    # Also update the create_dummy_institution_users method to use our new institution IDs
     def create_dummy_institution_users(self):
         dummy_users = [
             {
-                'institution_id': 'INST_0001',
+                'institution_id': 'HEI_01',
                 'username': 'inst001_admin',
                 'password': 'password123',
                 'contact_person': 'Dr. Rajesh Kumar',
-                'email': 'rajesh.kumar@university001.edu.in',
+                'email': 'rajesh.kumar@iitvaranasi.edu.in',
                 'phone': '+91-9876543210'
             },
             {
-                'institution_id': 'INST_0005',
-                'username': 'inst005_registrar',
+                'institution_id': 'HEI_07',
+                'username': 'inst007_registrar',
                 'password': 'testpass456',
                 'contact_person': 'Ms. Priya Sharma',
-                'email': 'priya.sharma@college005.edu.in',
+                'email': 'priya.sharma@himalayanrural.edu.in',
                 'phone': '+91-8765432109'
             }
         ]
-    
+
         for user_data in dummy_users:
             try:
                 cursor = self.conn.cursor()
                 cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
                 existing_user = cursor.fetchone()
-            
+        
                 if not existing_user:
                     self.create_institution_user(
                         user_data['institution_id'],
@@ -768,46 +786,155 @@ class InstitutionalAIAnalyzer:
                 "mandatory": [
                     "affidavit_legal_status", "land_documents", "building_plan_approval",
                     "infrastructure_details", "financial_solvency_certificate",
-                    "faculty_recruitment_plan", "academic_curriculum", "governance_structure"
+                    "faculty_recruitment_plan", "academic_curriculum", "governance_structure",
+                    "curriculum_innovation_plan", "faculty_development_plan"
                 ],
                 "supporting": [
                     "feasibility_report", "market_demand_analysis", "five_year_development_plan",
-                    "industry_partnerships", "research_facilities_plan"
+                    "industry_partnerships", "research_facilities_plan", "community_engagement_plan",
+                    "sustainability_plan", "digital_infrastructure_plan"
                 ]
             },
             "renewal_approval": {
                 "mandatory": [
                     "previous_approval_letters", "annual_reports", "financial_audit_reports",
-                    "faculty_student_data", "infrastructure_utilization", "academic_performance"
+                    "faculty_student_data", "infrastructure_utilization", "academic_performance",
+                    "research_publications", "community_projects_report", "governance_audit"
                 ],
                 "supporting": [
-                    "naac_accreditation", "nirf_data", "research_publications",
-                    "placement_records", "social_impact_reports"
+                    "naac_accreditation", "nirf_data", "placement_records", 
+                    "social_impact_reports", "environmental_sustainability_report",
+                    "stakeholder_feedback", "alumni_engagement_report"
                 ]
             },
             "expansion_approval": {
                 "mandatory": [
                     "current_status_report", "expansion_justification", "additional_infrastructure",
-                    "enhanced_faculty_plan", "financial_viability", "market_analysis"
+                    "enhanced_faculty_plan", "financial_viability", "market_analysis",
+                    "curriculum_expansion_plan", "infrastructure_development_plan"
                 ],
                 "supporting": [
                     "stakeholder_feedback", "alumni_support", "industry_demand",
-                    "government_schemes_participation"
+                    "government_schemes_participation", "research_collaboration_plan"
                 ]
             }
         }
-
+        
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
         np.random.seed(42)
-        n_institutions = 20
-        years_of_data = 10
+    
+        # Use the 20 institutions from our previous response
+        institutions_list = [
+            {
+                'institution_id': 'HEI_01', 'institution_name': 'Indian Institute of Technology, Varanasi',
+                'institution_type': 'Multi-disciplinary Education and Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Uttar Pradesh', 'established_year': 1959
+            },
+                {
+                'institution_id': 'HEI_02', 'institution_name': 'National Institute of Technology, Srinagar',
+                'institution_type': 'Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Jammu & Kashmir', 'established_year': 1960
+            },
+            {
+                'institution_id': 'HEI_03', 'institution_name': 'State University of Bengaluru',
+                'institution_type': 'Teaching-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Karnataka', 'established_year': 1964
+            },
+            {
+                'institution_id': 'HEI_04', 'institution_name': 'National Law School, Delhi',
+                'institution_type': 'Specialised Streams', 'heritage_category': 'New and Upcoming',
+                'state': 'Delhi', 'established_year': 2008
+            },
+            {
+                'institution_id': 'HEI_05', 'institution_name': 'National Skill Development Institute, Pune',
+                'institution_type': 'Vocational and Skill-Intensive', 'heritage_category': 'New and Upcoming',
+                'state': 'Maharashtra', 'established_year': 2010
+            },
+            {
+                'institution_id': 'HEI_06', 'institution_name': 'Rajiv Gandhi University of Community Health',
+                'institution_type': 'Community Engagement & Service', 'heritage_category': 'New and Upcoming',
+                'state': 'Telangana', 'established_year': 2012
+            },
+            {
+                'institution_id': 'HEI_07', 'institution_name': 'Himalayan Institute of Rural Studies',
+                'institution_type': 'Rural & Remote location', 'heritage_category': 'Old and Established',
+                'state': 'Uttarakhand', 'established_year': 1975
+            },
+            {
+                'institution_id': 'HEI_08', 'institution_name': 'Indian Institute of Management, Indore',
+                'institution_type': 'Specialised Streams', 'heritage_category': 'Old and Established',
+                'state': 'Madhya Pradesh', 'established_year': 1996
+            },
+            {
+                'institution_id': 'HEI_09', 'institution_name': 'Amrita Vishwa Vidyapeetham, Coimbatore',
+                'institution_type': 'Multi-disciplinary Education and Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Tamil Nadu', 'established_year': 1994
+            },
+            {
+                'institution_id': 'HEI_10', 'institution_name': 'KIIT University, Bhubaneswar',
+                'institution_type': 'Teaching-Intensive', 'heritage_category': 'New and Upcoming',
+                'state': 'Odisha', 'established_year': 2004
+            },
+            {
+                'institution_id': 'HEI_11', 'institution_name': 'Tata Institute of Social Sciences, Mumbai',
+                'institution_type': 'Specialised Streams', 'heritage_category': 'Old and Established',
+                'state': 'Maharashtra', 'established_year': 1936
+            },
+            {
+                'institution_id': 'HEI_12', 'institution_name': 'Lovely Professional University, Phagwara',
+                'institution_type': 'Teaching-Intensive', 'heritage_category': 'New and Upcoming',
+                'state': 'Punjab', 'established_year': 2005
+            },
+            {
+                'institution_id': 'HEI_13', 'institution_name': 'Aligarh Muslim University, Aligarh',
+                'institution_type': 'Multi-disciplinary Education and Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Uttar Pradesh', 'established_year': 1920
+            },
+            {
+                'institution_id': 'HEI_14', 'institution_name': 'South Indian Institute of Maritime Studies',
+                'institution_type': 'Vocational and Skill-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Kerala', 'established_year': 1975
+            },
+            {
+                'institution_id': 'HEI_15', 'institution_name': 'Christ University, Bengaluru',
+                'institution_type': 'Teaching-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Karnataka', 'established_year': 1969
+            },
+            {
+                'institution_id': 'HEI_16', 'institution_name': 'Jamia Millia Islamia, New Delhi',
+                'institution_type': 'Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Delhi', 'established_year': 1920
+            },
+            {
+                'institution_id': 'HEI_17', 'institution_name': 'Symbiosis International University, Pune',
+                'institution_type': 'Multi-disciplinary Education and Research-Intensive', 'heritage_category': 'New and Upcoming',
+                'state': 'Maharashtra', 'established_year': 2002
+            },
+            {
+                'institution_id': 'HEI_18', 'institution_name': 'National Institute of Fashion Technology, Delhi',
+                'institution_type': 'Specialised Streams', 'heritage_category': 'Old and Established',
+                'state': 'Delhi', 'established_year': 1986
+            },
+            {
+                'institution_id': 'HEI_19', 'institution_name': 'Birla Institute of Technology, Mesra',
+                'institution_type': 'Research-Intensive', 'heritage_category': 'Old and Established',
+                'state': 'Jharkhand', 'established_year': 1955
+            },
+            {
+                'institution_id': 'HEI_20', 'institution_name': 'Central Tribal University of Andhra Pradesh',
+                'institution_type': 'Rural & Remote location', 'heritage_category': 'New and Upcoming',
+                'state': 'Andhra Pradesh', 'established_year': 2019
+            }
+        ]
 
         institutions_data = []
+        years_of_data = 10
 
-        for inst_id in range(1, n_institutions + 1):
-            institution_type = np.random.choice(self.institution_categories)
-            heritage_type = np.random.choice(self.heritage_categories)
-            
+        for inst_info in institutions_list:
+            institution_type = inst_info['institution_type']
+            heritage_type = inst_info['heritage_category']
+        
+            # Set weights based on institution type
             if institution_type == "Research-Intensive":
                 research_weight = 1.5
                 teaching_weight = 0.8
@@ -832,85 +959,95 @@ class InstitutionalAIAnalyzer:
                 research_weight = 1.0
                 teaching_weight = 1.0
                 community_weight = 1.0
-                
+            
+            # Heritage bonus
             if heritage_type == "Old and Established":
-                establishment_year = np.random.randint(1950, 1990)
                 stability_bonus = 0.2
             else:
-                establishment_year = np.random.randint(2000, 2015)
                 stability_bonus = 0.0
-            
+        
             for year_offset in range(years_of_data):
                 year = 2023 - year_offset
                 improvement_factor = 1.0 + (year_offset * 0.02)
 
+                # Base institution data
                 institution_data = {
-                    'institution_id': f'INST_{inst_id:04d}',
-                    'institution_name': f'University {inst_id:03d}',
+                    'institution_id': inst_info['institution_id'],
+                    'institution_name': inst_info['institution_name'],
                     'year': year,
                     'institution_type': institution_type,
                     'heritage_category': heritage_type,
-                    'established_year': establishment_year,
-                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh']),
-                    
+                    'established_year': inst_info['established_year'],
+                    'state': inst_info['state'],
+                
+                    # Curriculum parameters (Appendix 1 - i)
                     'curriculum_innovation_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'student_feedback_score': round(np.random.uniform(6, 9) * improvement_factor, 2),
                     'stakeholder_involvement_score': round(np.random.uniform(5, 8) * improvement_factor, 2),
                     'lifelong_learning_initiatives': np.random.randint(1, 10),
                     'multidisciplinary_courses': np.random.randint(5, 20),
-                    
+                
+                    # Faculty Resources parameters (Appendix 1 - ii)
                     'faculty_selection_transparency': round(np.random.uniform(6, 9) * improvement_factor, 2),
                     'faculty_diversity_index': round(np.random.uniform(5, 8) * improvement_factor, 2),
                     'continuous_professional_dev': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'social_inclusivity_measures': round(np.random.uniform(5, 8) * improvement_factor, 2),
-                    
+                
+                    # Learning and Teaching parameters (Appendix 1 - iii)
                     'experiential_learning_score': round(np.random.uniform(5, 9) * teaching_weight * improvement_factor, 2),
                     'digital_technology_adoption': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'research_oriented_teaching': round(np.random.uniform(5, 8) * research_weight * improvement_factor, 2),
                     'critical_thinking_focus': round(np.random.uniform(5, 9) * improvement_factor, 2),
-                    
+                
+                    # Research and Innovation parameters (Appendix 1 - iv)
                     'interdisciplinary_research': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'industry_collaboration_score': round(np.random.uniform(4, 8) * improvement_factor, 2),
                     'patents_filed': int(np.random.poisson(3 * research_weight)),
                     'research_publications': int(np.random.poisson(15 * research_weight)),
                     'translational_research_score': round(np.random.uniform(3, 8) * research_weight * improvement_factor, 2),
-                    
+                
+                    # Community Engagement parameters (Appendix 1 - vi)
                     'community_projects_count': int(np.random.poisson(8 * community_weight)),
                     'social_outreach_score': round(np.random.uniform(4, 9) * community_weight * improvement_factor, 2),
                     'rural_engagement_initiatives': np.random.randint(1, 12),
-                    
+                
+                    # Green Initiatives parameters (Appendix 1 - vii)
                     'renewable_energy_adoption': round(np.random.uniform(3, 9) * improvement_factor, 2),
                     'waste_management_score': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'carbon_footprint_reduction': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'sdg_alignment_score': round(np.random.uniform(4, 9) * improvement_factor, 2),
-                    
+                
+                    # Governance and Administration parameters (Appendix 1 - viii)
                     'egovernance_implementation': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'grievance_redressal_efficiency': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'internationalization_score': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'gender_parity_ratio': round(np.random.uniform(0.3, 0.8), 2),
-                    
+                
+                    # Infrastructure Development parameters (Appendix 1 - ix)
                     'digital_infrastructure_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'research_lab_quality': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'library_resources_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'sports_facilities_score': round(np.random.uniform(4, 8) * improvement_factor, 2),
-                    
+                
+                    # Financial Resources and Management parameters (Appendix 1 - x)
                     'research_funding_utilization': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'infrastructure_investment': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'financial_sustainability': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'csr_funding_attraction': round(np.random.uniform(2, 8) * improvement_factor, 2),
                 }
-                
+            
+                # Calculate scores based on Appendix 1 framework
                 institution_data['input_score'] = self.calculate_input_score(institution_data)
                 institution_data['process_score'] = self.calculate_process_score(institution_data)
                 institution_data['outcome_score'] = self.calculate_outcome_score(institution_data)
                 institution_data['impact_score'] = self.calculate_impact_score(institution_data)
                 institution_data['overall_score'] = self.calculate_overall_score(institution_data)
-                
+            
                 institution_data['approval_recommendation'] = self.generate_approval_recommendation(institution_data['overall_score'])
                 institution_data['risk_level'] = self.assess_risk_level(institution_data['overall_score'])
-                
+            
                 institutions_data.append(institution_data)
-        
+    
         return pd.DataFrame(institutions_data)
 
     def calculate_input_score(self, data):
