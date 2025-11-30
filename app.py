@@ -1205,41 +1205,117 @@ class InstitutionalAIAnalyzer:
             ORDER BY upload_date DESC
         ''', self.conn, params=(institution_id,))
     
-    def analyze_document_sufficiency(self, uploaded_docs: List[str], approval_type: str) -> Dict:
-        """Analyze document sufficiency percentage"""
-        requirements = self.document_requirements[approval_type]
-        
-        # Count present documents
-        mandatory_present = 0
-        for doc in requirements['mandatory']:
-            for uploaded_doc in uploaded_docs:
-                if doc.lower() in uploaded_doc.lower():
-                    mandatory_present += 1
-                    break
-        
-        supporting_present = 0
-        for doc in requirements['supporting']:
-            for uploaded_doc in uploaded_docs:
-                if doc.lower() in uploaded_doc.lower():
-                    supporting_present += 1
-                    break
-        
-        total_mandatory = len(requirements['mandatory'])
-        total_supporting = len(requirements['supporting'])
-        
-        mandatory_sufficiency = (mandatory_present / total_mandatory) * 100 if total_mandatory > 0 else 0
-        overall_sufficiency = ((mandatory_present + supporting_present) / 
-                             (total_mandatory + total_supporting)) * 100 if (total_mandatory + total_supporting) > 0 else 0
-        
-        return {
-            'mandatory_sufficiency': mandatory_sufficiency,
-            'overall_sufficiency': overall_sufficiency,
-            'missing_mandatory': [doc for doc in requirements['mandatory'] 
-                                if not any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)],
-            'missing_supporting': [doc for doc in requirements['supporting'] 
-                                 if not any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)],
-            'recommendations': self.generate_document_recommendations(mandatory_sufficiency)
-        }
+    def analyze_document_sufficiency(institution_id, approval_type, analyzer):
+        """Analyze document sufficiency and generate recommendations"""
+    
+        # Get uploaded documents
+        uploaded_docs = analyzer.get_institution_documents(institution_id)
+        uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+    
+        # Get requirements
+        requirements = get_document_requirements_by_parameters(approval_type)
+    
+        # Calculate sufficiency scores
+        mandatory_docs = [doc for param_docs in requirements["mandatory"].values() for doc in param_docs]
+        supporting_docs = [doc for param_docs in requirements["supporting"].values() for doc in param_docs]
+    
+        mandatory_uploaded = sum(1 for doc in mandatory_docs if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
+        supporting_uploaded = sum(1 for doc in supporting_docs if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
+    
+        mandatory_sufficiency = (mandatory_uploaded / len(mandatory_docs)) * 100 if mandatory_docs else 0
+        overall_sufficiency = ((mandatory_uploaded + supporting_uploaded) / (len(mandatory_docs) + len(supporting_docs))) * 100 if (mandatory_docs + supporting_docs) else 0
+    
+        # Display analysis results
+        st.subheader("📊 Document Sufficiency Analysis")
+    
+        col1, col2, col3 = st.columns(3)
+    
+        with col1:
+            st.metric("Mandatory Documents", f"{mandatory_sufficiency:.1f}%")
+    
+        with col2:
+            st.metric("Overall Sufficiency", f"{overall_sufficiency:.1f}%")
+    
+        with col3:
+            st.metric("Total Documents", f"{len(uploaded_doc_names)}")
+    
+        # Visual gauge
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=mandatory_sufficiency,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Mandatory Documents Sufficiency"},
+            gauge={
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 50], 'color': "lightgray"},
+                    {'range': [50, 80], 'color': "yellow"},
+                    {'range': [80, 100], 'color': "lightgreen"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 90
+                }
+            }
+        ))
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+    
+        # Generate recommendations
+        st.subheader("💡 AI Recommendations")
+    
+        if mandatory_sufficiency < 50:
+            st.error("**❌ Critical Issue**: Less than 50% of mandatory documents uploaded.")
+            st.write("**Action Required**: Upload all mandatory documents to proceed with approval process.")
+    
+        elif mandatory_sufficiency < 80:
+            st.warning("**🟡 Attention Needed**: Some mandatory documents are missing.")
+            st.write("**Recommended Action**: Complete mandatory document upload for smoother approval process.")
+    
+        elif mandatory_sufficiency < 100:
+            st.info("**🔵 Good Progress**: Most mandatory documents are uploaded.")
+            st.write("**Next Steps**: Complete remaining mandatory documents and consider uploading supporting documents.")
+    
+        else:
+            st.success("**✅ Excellent**: All mandatory documents are uploaded!")
+            st.write("**Next Steps**: Consider uploading supporting documents for enhanced assessment.")
+    
+        # Missing documents analysis
+        missing_mandatory = []
+        for param_docs in requirements["mandatory"].values():
+            for doc in param_docs:
+                if not any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names):
+                    missing_mandatory.append(doc)
+    
+        if missing_mandatory:
+            st.error("**Missing Mandatory Documents:**")
+            for doc in missing_mandatory[:5]:  # Show top 5 missing
+                st.write(f"• {doc}")
+    
+        # Parameter-wise analysis
+        st.subheader("📈 Parameter-wise Document Coverage")
+    
+        param_coverage = {}
+        for parameter, documents in requirements["mandatory"].items():
+            uploaded_count = sum(1 for doc in documents if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
+            total_count = len(documents)
+            coverage = (uploaded_count / total_count) * 100 if total_count > 0 else 0
+            param_coverage[parameter] = coverage
+    
+        # Create bar chart for parameter coverage
+        param_df = pd.DataFrame({
+            'Parameter': list(param_coverage.keys()),
+            'Coverage (%)': list(param_coverage.values())
+        })
+    
+        fig = px.bar(param_df, x='Parameter', y='Coverage (%)', 
+                     title="Document Coverage by Parameter",
+                     color='Coverage (%)',
+                     color_continuous_scale='RdYlGn')
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
     
     def generate_document_recommendations(self, mandatory_sufficiency: float) -> List[str]:
         """Generate recommendations based on document sufficiency"""
@@ -2922,139 +2998,260 @@ def create_document_analysis_module(analyzer):
     
     st.info("Analyze document completeness and generate sufficiency reports for approval processes")
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("Document Upload & Analysis")
+        st.subheader("Document Analysis Dashboard")
         
         # Institution selection
         current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
         selected_institution = st.selectbox(
             "Select Institution",
-            current_institutions
+            current_institutions,
+            key="doc_analysis_institution"
         )
         
         approval_type = st.selectbox(
             "Select Approval Type",
             ["new_approval", "renewal_approval", "expansion_approval"],
-            format_func=lambda x: x.replace('_', ' ').title()
+            format_func=lambda x: x.replace('_', ' ').title(),
+            key="doc_analysis_approval_type"
         )
         
-        uploaded_files = st.file_uploader(
-            "Upload Institutional Documents",
-            type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
-            accept_multiple_files=True,
-            help="Upload all required documents for AI analysis"
-        )
+        # Get institution name for display
+        institution_name = analyzer.historical_data[
+            analyzer.historical_data['institution_id'] == selected_institution
+        ]['institution_name'].iloc[0] if not analyzer.historical_data.empty else "Unknown Institution"
         
-        if uploaded_files:
-            # Document type mapping
-            st.subheader("📝 Document Type Assignment")
-            document_types = []
-            for i, file in enumerate(uploaded_files):
-                doc_type = st.selectbox(
-                    f"Document type for: {file.name}",
-                    ["affidavit_legal_status", "land_documents", "building_plan_approval", 
-                     "financial_solvency_certificate", "faculty_recruitment_plan", 
-                     "academic_curriculum", "annual_reports", "research_publications",
-                     "placement_records", "other"],
-                    key=f"doc_type_{i}"
-                )
-                document_types.append(doc_type)
-            
-            if st.button("💾 Save Documents & Analyze"):
-                # Save documents
-                analyzer.save_uploaded_documents(selected_institution, uploaded_files, document_types)
-                st.success("✅ Documents saved successfully!")
+        st.subheader(f"📁 Document Checklist for {institution_name}")
+        
+        # Document requirements based on 10 parameters
+        document_requirements = get_document_requirements_by_parameters(approval_type)
+        
+        # Display document checklist
+        display_document_checklist(document_requirements, selected_institution, analyzer)
+        
+        # Analysis and recommendations
+        if st.button("🤖 Analyze Document Sufficiency", type="primary"):
+            analyze_document_sufficiency(selected_institution, approval_type, analyzer)
+
+def display_document_checklist(document_requirements, institution_id, analyzer):
+    """Display the document checklist with upload status"""
+    
+    # Get uploaded documents for this institution
+    uploaded_docs = analyzer.get_institution_documents(institution_id)
+    uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+    
+    # Display mandatory documents
+    st.subheader("📋 Mandatory Documents Checklist")
+    
+    for parameter, documents in document_requirements["mandatory"].items():
+        with st.expander(f"✅ {parameter} - Mandatory Documents", expanded=True):
+            for doc in documents:
+                # Check if document is uploaded
+                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names)
                 
-                # Analyze document sufficiency
-                file_names = [file.name for file in uploaded_files]
-                analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
-                
-                # Display results
-                st.subheader("📊 Document Sufficiency Analysis")
-                
-                col1, col2 = st.columns(2)
-                
+                col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.metric(
-                        "Mandatory Documents", 
-                        f"{analysis_result['mandatory_sufficiency']:.1f}%",
-                        delta=f"{analysis_result['mandatory_sufficiency'] - 100:.1f}%" if analysis_result['mandatory_sufficiency'] < 100 else None,
-                        delta_color="inverse"
-                    )
+                    if is_uploaded:
+                        st.success(f"✓ {doc}")
+                    else:
+                        st.error(f"✗ {doc}")
                 
                 with col2:
-                    st.metric(
-                        "Overall Sufficiency", 
-                        f"{analysis_result['overall_sufficiency']:.1f}%"
-                    )
-                
-                # Visual representation
-                fig = go.Figure()
-                fig.add_trace(go.Indicator(
-                    mode = "gauge+number+delta",
-                    value = analysis_result['mandatory_sufficiency'],
-                    domain = {'x': [0, 1], 'y': [0, 1]},
-                    title = {'text': "Mandatory Documents Sufficiency"},
-                    gauge = {
-                        'axis': {'range': [None, 100]},
-                        'bar': {'color': "darkblue"},
-                        'steps': [
-                            {'range': [0, 50], 'color': "lightgray"},
-                            {'range': [50, 80], 'color': "yellow"},
-                            {'range': [80, 100], 'color': "lightgreen"}
-                        ],
-                        'threshold': {
-                            'line': {'color': "red", 'width': 4},
-                            'thickness': 0.75,
-                            'value': 90
-                        }
-                    }
-                ))
-                fig.update_layout(height=300)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Missing documents
-                if analysis_result['missing_mandatory']:
-                    st.error("**❌ Missing Mandatory Documents:**")
-                    for doc in analysis_result['missing_mandatory']:
-                        st.write(f"• {doc.replace('_', ' ').title()}")
-                
-                if analysis_result['missing_supporting']:
-                    st.warning("**📝 Missing Supporting Documents:**")
-                    for doc in analysis_result['missing_supporting']:
-                        st.write(f"• {doc.replace('_', ' ').title()}")
-                
-                # Recommendations
-                st.info("**💡 AI Recommendations:**")
-                for recommendation in analysis_result['recommendations']:
-                    st.write(f"• {recommendation}")
+                    if is_uploaded:
+                        st.markdown("**Uploaded** ✅")
+                    else:
+                        st.markdown("**Missing** ❌")
     
-    with col2:
-        st.subheader("Document Requirements Guide")
-        
-        requirements = analyzer.document_requirements
-        
-        for approval_type, docs in requirements.items():
-            with st.expander(f"{approval_type.replace('_', ' ').title()} Requirements"):
-                st.write("**Mandatory Documents:**")
-                for doc in docs['mandatory']:
-                    st.write(f"• {doc.replace('_', ' ').title()}")
+    # Display supporting documents
+    st.subheader("📝 Supporting Documents Checklist")
+    
+    for parameter, documents in document_requirements["supporting"].items():
+        with st.expander(f"📊 {parameter} - Supporting Documents"):
+            for doc in documents:
+                # Check if document is uploaded
+                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names)
                 
-                st.write("**Supporting Documents:**")
-                for doc in docs['supporting']:
-                    st.write(f"• {doc.replace('_', ' ').title()}")
-        
-        # Show uploaded documents for selected institution
-        if selected_institution:
-            st.subheader("📁 Previously Uploaded Documents")
-            existing_docs = analyzer.get_institution_documents(selected_institution)
-            if len(existing_docs) > 0:
-                st.dataframe(existing_docs[['document_name', 'document_type', 'upload_date', 'status']])
-            else:
-                st.info("No documents uploaded yet for this institution.")
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    if is_uploaded:
+                        st.info(f"✓ {doc}")
+                    else:
+                        st.warning(f"○ {doc}")
+                
+                with col2:
+                    if is_uploaded:
+                        st.markdown("**Uploaded** ✅")
+                    else:
+                        st.markdown("**Optional** 🔄")
 
+def get_document_requirements_by_parameters(approval_type):
+    """Get document requirements organized by the 10 parameters"""
+    
+    base_requirements = {
+        "new_approval": {
+            "mandatory": {
+                "Curriculum": [
+                    "Curriculum framework and syllabus documents",
+                    "Course outlines with learning objectives",
+                    "Curriculum review and revision processes",
+                    "Academic calendar and course schedules"
+                ],
+                "Faculty Resources": [
+                    "Faculty recruitment policy and procedures",
+                    "Faculty qualification records and biodata",
+                    "Selection committee composition and minutes",
+                    "Faculty development programs records"
+                ],
+                "Learning and Teaching": [
+                    "Teaching plans and lesson schedules",
+                    "Student assessment records and methods",
+                    "Learning outcome achievement records",
+                    "Classroom observation reports"
+                ],
+                "Research and Innovation": [
+                    "Research policy document",
+                    "Research publication records",
+                    "Patent filings and grants documentation",
+                    "Research project funding details"
+                ],
+                "Governance and Administration": [
+                    "Institutional act, statutes, and regulations",
+                    "Organizational structure chart",
+                    "Governance body composition and minutes",
+                    "Financial management policies"
+                ]
+            },
+            "supporting": {
+                "Curriculum": [
+                    "Innovative teaching-learning materials",
+                    "Industry interface documents",
+                    "Multidisciplinary courses documentation",
+                    "Skill-integration evidence"
+                ],
+                "Faculty Resources": [
+                    "Faculty achievement and award records",
+                    "Professional development plans",
+                    "Faculty research records",
+                    "Industry exposure evidence"
+                ],
+                "Infrastructure Development": [
+                    "Campus master plan and layout",
+                    "Building and facility inventory",
+                    "Laboratory and equipment details",
+                    "IT infrastructure details"
+                ],
+                "Financial Resources": [
+                    "Annual financial statements",
+                    "Budget allocation certificates",
+                    "Research grant utilization details",
+                    "Infrastructure development expenditure"
+                ]
+            }
+        },
+        "renewal_approval": {
+            "mandatory": {
+                "Curriculum": [
+                    "Updated curriculum framework",
+                    "Stakeholder feedback reports",
+                    "Curriculum improvement records",
+                    "Academic performance reports"
+                ],
+                "Faculty Resources": [
+                    "Updated faculty records",
+                    "Faculty development reports",
+                    "Performance appraisal records",
+                    "Faculty retention statistics"
+                ],
+                "Learning and Teaching": [
+                    "Student performance analysis",
+                    "Teaching effectiveness reports",
+                    "Digital learning integration",
+                    "Student feedback compilation"
+                ],
+                "Research and Innovation": [
+                    "Recent research publications",
+                    "Ongoing research projects",
+                    "Research collaboration agreements",
+                    "Innovation and patent updates"
+                ],
+                "Governance and Administration": [
+                    "Updated governance documents",
+                    "Compliance audit reports",
+                    "Administrative efficiency reports",
+                    "Stakeholder satisfaction surveys"
+                ]
+            },
+            "supporting": {
+                "Community Engagement": [
+                    "Community project reports",
+                    "Social impact assessments",
+                    "Outreach program records",
+                    "CSR initiative documentation"
+                ],
+                "Green Initiatives": [
+                    "Environmental policy updates",
+                    "Sustainability reports",
+                    "Energy consumption records",
+                    "Waste management documentation"
+                ],
+                "Extracurricular Activities": [
+                    "Student activity records",
+                    "Leadership program reports",
+                    "Cultural event documentation",
+                    "Sports infrastructure details"
+                ]
+            }
+        },
+        "expansion_approval": {
+            "mandatory": {
+                "Infrastructure Development": [
+                    "Expansion master plan",
+                    "Additional infrastructure details",
+                    "Laboratory expansion plans",
+                    "Digital infrastructure upgrades"
+                ],
+                "Faculty Resources": [
+                    "Enhanced faculty recruitment plan",
+                    "Additional faculty requirements",
+                    "Faculty development for expansion",
+                    "Specialized faculty profiles"
+                ],
+                "Curriculum": [
+                    "New program curriculum",
+                    "Expanded course offerings",
+                    "Industry alignment documents",
+                    "Market demand analysis"
+                ],
+                "Financial Resources": [
+                    "Expansion budget and funding",
+                    "Financial viability study",
+                    "Revenue projections",
+                    "Investment plans"
+                ]
+            },
+            "supporting": {
+                "Research and Innovation": [
+                    "Expanded research facilities",
+                    "New research collaborations",
+                    "Innovation center plans",
+                    "IPR expansion strategy"
+                ],
+                "Community Engagement": [
+                    "Enhanced community programs",
+                    "Expanded outreach plans",
+                    "Social impact projections",
+                    "Stakeholder engagement strategy"
+                ]
+            }
+        }
+    }
+    
+    return base_requirements.get(approval_type, base_requirements["new_approval"])
+
+
+            
 def create_ai_analysis_reports(analyzer):
     st.header("🤖 Comprehensive AI Analysis Reports")
     
