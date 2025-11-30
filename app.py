@@ -1678,14 +1678,6 @@ class SimpleVectorStore:
         
         return results
 
-# Page configuration
-st.set_page_config(
-    page_title="AI-Powered Institutional Approval System - UGC/AICTE",
-    page_icon="🏛️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 class RAGDataExtractor:
     def __init__(self):
         try:
