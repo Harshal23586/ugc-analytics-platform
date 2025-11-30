@@ -32,15 +32,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import re
 from typing import List
 
-# Initialize session state at module level
-if 'session_initialized' not in st.session_state:
-    st.session_state.session_initialized = True
-    st.session_state.institution_user = None
-    st.session_state.user_role = None
-    st.session_state.rag_analysis = None
-    st.session_state.selected_institution = None
-
-# Page configuration with enhanced UI
+# Page configuration MUST be the first Streamlit command
 st.set_page_config(
     page_title="AI-Powered Institutional Approval System - UGC/AICTE",
     page_icon="🏛️",
@@ -48,7 +40,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Enhanced Custom CSS from app.py
+# THEN initialize session state
+if 'session_initialized' not in st.session_state:
+    st.session_state.session_initialized = True
+    st.session_state.institution_user = None
+    st.session_state.user_role = None
+    st.session_state.rag_analysis = None
+    st.session_state.selected_institution = None
+
+# THEN your custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -95,6 +95,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 
 # RAG and Analyzer classes (keep all the original functionality)
 class RAGDocument:
