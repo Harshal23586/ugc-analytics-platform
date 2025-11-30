@@ -3243,29 +3243,119 @@ def create_data_management_module(analyzer):
     with tab2:
         st.subheader("Current Database Contents")
         
+        # Generate comprehensive dummy data that matches both form structures
+        dummy_data = generate_comprehensive_dummy_data()
+        
         # Show database statistics
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            total_records = len(analyzer.historical_data)
-            st.metric("Total Records", total_records)
+            total_records = len(dummy_data)
+            st.metric("Total Records", f"{total_records:,}")
         with col2:
-            unique_institutions = analyzer.historical_data['institution_id'].nunique()
+            unique_institutions = dummy_data['institution_id'].nunique()
             st.metric("Unique Institutions", unique_institutions)
         with col3:
-            years_covered = analyzer.historical_data['year'].nunique()
+            years_covered = f"{dummy_data['year'].min()}-{dummy_data['year'].max()}"
             st.metric("Years Covered", years_covered)
+        with col4:
+            current_year_data = len(dummy_data[dummy_data['year'] == 2023])
+            st.metric("Current Year Records", current_year_data)
         
-        # Data preview
-        st.subheader("Data Preview")
-        st.dataframe(analyzer.historical_data.head(10))
+        # Performance Overview
+        st.subheader("📊 Performance Overview")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            avg_performance = dummy_data['performance_score'].mean()
+            st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
+        
+        with col2:
+            high_performers = len(dummy_data[dummy_data['performance_score'] >= 8.0])
+            st.metric("High Performers (8+ Score)", high_performers)
+        
+        with col3:
+            avg_placement = dummy_data['placement_rate'].mean()
+            st.metric("Avg Placement Rate", f"{avg_placement:.1f}%")
+        
+        # Data preview with tabs for different views
+        st.subheader("📋 Data Preview")
+        
+        data_tabs = st.tabs(["Institutional Overview", "Academic Metrics", "Research & Infrastructure", "Financial & Governance"])
+        
+        with data_tabs[0]:
+            st.write("**Basic Institutional Data**")
+            overview_cols = ['institution_id', 'institution_name', 'institution_type', 'state', 
+                           'established_year', 'year', 'performance_score', 'approval_recommendation', 'risk_level']
+            st.dataframe(dummy_data[overview_cols].head(10), use_container_width=True)
+        
+        with data_tabs[1]:
+            st.write("**Academic Performance Metrics**")
+            academic_cols = ['institution_id', 'institution_name', 'naac_grade', 'nirf_ranking',
+                           'student_faculty_ratio', 'phd_faculty_ratio', 'placement_rate', 
+                           'higher_education_rate']
+            st.dataframe(dummy_data[academic_cols].head(10), use_container_width=True)
+        
+        with data_tabs[2]:
+            st.write("**Research & Infrastructure Metrics**")
+            research_cols = ['institution_id', 'institution_name', 'research_publications',
+                           'research_grants_amount', 'patents_filed', 'industry_collaborations',
+                           'digital_infrastructure_score', 'library_volumes']
+            st.dataframe(dummy_data[research_cols].head(10), use_container_width=True)
+        
+        with data_tabs[3]:
+            st.write("**Financial & Governance Metrics**")
+            financial_cols = ['institution_id', 'institution_name', 'financial_stability_score',
+                            'compliance_score', 'administrative_efficiency', 'community_projects',
+                            'entrepreneurship_cell_score']
+            st.dataframe(dummy_data[financial_cols].head(10), use_container_width=True)
+        
+        # Quick Analytics
+        st.subheader("📈 Quick Analytics")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Performance distribution
+            fig1 = px.histogram(dummy_data, x='performance_score', 
+                              title="Performance Score Distribution",
+                              nbins=20, color_discrete_sequence=['#1f77b4'])
+            st.plotly_chart(fig1, use_container_width=True)
+        
+        with col2:
+            # Institution type performance
+            type_performance = dummy_data.groupby('institution_type')['performance_score'].mean().sort_values(ascending=False)
+            fig2 = px.bar(x=type_performance.index, y=type_performance.values,
+                         title="Average Performance by Institution Type",
+                         color=type_performance.values,
+                         color_continuous_scale='Viridis')
+            fig2.update_layout(xaxis_title="Institution Type", yaxis_title="Average Performance Score")
+            st.plotly_chart(fig2, use_container_width=True)
         
         # Export data
-        if st.button("📥 Export Current Data as CSV"):
-            csv = analyzer.historical_data.to_csv(index=False)
+        st.subheader("📥 Export Data")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("📊 Export Summary Statistics"):
+                summary_stats = {
+                    'total_institutions': dummy_data['institution_id'].nunique(),
+                    'total_records': len(dummy_data),
+                    'years_covered': f"{dummy_data['year'].min()}-{dummy_data['year'].max()}",
+                    'avg_performance_score': dummy_data['performance_score'].mean(),
+                    'avg_placement_rate': dummy_data['placement_rate'].mean(),
+                    'total_research_publications': dummy_data['research_publications'].sum(),
+                    'high_performers_count': len(dummy_data[dummy_data['performance_score'] >= 8.0])
+                }
+                st.json(summary_stats)
+        
+        with col2:
+            csv = dummy_data.to_csv(index=False)
             st.download_button(
-                label="Download CSV",
+                label="📥 Download Full Dataset as CSV",
                 data=csv,
-                file_name="institutional_data_export.csv",
+                file_name="comprehensive_institutional_data.csv",
                 mime="text/csv"
             )
     
@@ -3275,20 +3365,217 @@ def create_data_management_module(analyzer):
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔄 Regenerate Sample Data", help="Replace current data with new sample data"):
-                new_data = analyzer.generate_comprehensive_historical_data()
-                new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
-                analyzer.historical_data = new_data
-                st.success("✅ Sample data regenerated successfully!")
+            if st.button("🔄 Generate New Sample Data", help="Create fresh sample data with current parameters"):
+                new_data = generate_comprehensive_dummy_data()
+                try:
+                    new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+                    analyzer.historical_data = new_data
+                    st.success("✅ New sample data generated successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error generating data: {e}")
         
         with col2:
             if st.button("🗑️ Clear All Data", help="Remove all data from the database"):
-                cursor = analyzer.conn.cursor()
-                cursor.execute('DELETE FROM institutions')
-                analyzer.conn.commit()
-                analyzer.historical_data = pd.DataFrame()
-                st.success("✅ All data cleared successfully!")
+                try:
+                    cursor = analyzer.conn.cursor()
+                    cursor.execute('DELETE FROM institutions')
+                    analyzer.conn.commit()
+                    analyzer.historical_data = pd.DataFrame()
+                    st.success("✅ All data cleared successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error clearing data: {e}")
+        
+        # Database Info
+        st.subheader("Database Information")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info("**Data Structure**")
+            st.write(f"• **Total Columns:** {len(dummy_data.columns)}")
+            st.write(f"• **Data Types:** Mixed (Numeric, Categorical, Text)")
+            st.write(f"• **Update Frequency:** Manual/On-demand")
+        
+        with col2:
+            st.info("**Coverage**")
+            st.write(f"• **Institution Types:** {', '.join(dummy_data['institution_type'].unique())}")
+            st.write(f"• **States Covered:** {dummy_data['state'].nunique()}")
+            st.write(f"• **Time Period:** {dummy_data['year'].min()} - {dummy_data['year'].max()}")
 
+def generate_comprehensive_dummy_data():
+    """Generate comprehensive dummy data matching both Basic and Systematic form parameters"""
+    np.random.seed(42)
+    
+    # Create 20 unique institutions
+    n_institutions = 20
+    years = list(range(2014, 2024))  # 10 years of data
+    
+    institutions_data = []
+    
+    institution_types = ['State University', 'Private University', 'Deemed University', 'Autonomous College', 'Technical Institute']
+    states = ['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat']
+    
+    for inst_id in range(1, n_institutions + 1):
+        base_quality = np.random.uniform(0.4, 0.9)
+        inst_type = np.random.choice(institution_types)
+        state = np.random.choice(states)
+        
+        for year in years:
+            # Add some yearly variation
+            yearly_variation = base_quality + np.random.normal(0, 0.1)
+            yearly_variation = max(0.3, min(0.95, yearly_variation))
+            
+            # Academic Metrics (from Basic Form)
+            naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
+            naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
+            naac_grade = np.random.choice(naac_grades, p=naac_probs)
+            
+            nirf_rank = np.random.choice(list(range(1, 201)) + [None] * 50, p=[0.005] * 200 + [0.01] * 50)
+            student_faculty_ratio = max(10, np.random.normal(20, 5))
+            phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
+            placement_rate = max(40, min(98, np.random.normal(75, 10)))
+            
+            # Research & Infrastructure (from Basic Form)
+            research_publications = max(0, int(np.random.poisson(yearly_variation * 30)))
+            research_grants = max(0, int(np.random.exponential(yearly_variation * 500)))
+            digital_infrastructure = max(1, min(10, np.random.normal(7, 1.5)))
+            library_volumes = max(1000, int(np.random.normal(20000, 10000)))
+            
+            # Governance & Social Impact (from Basic Form)
+            financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
+            compliance_score = max(1, min(10, np.random.normal(8, 1)))
+            administrative_efficiency = max(1, min(10, np.random.normal(7.2, 1.1)))
+            community_projects = np.random.poisson(yearly_variation * 8)
+            
+            # Additional metrics from Systematic Form
+            curriculum_framework_score = max(1, min(10, np.random.normal(7.5, 1.0)))
+            faculty_diversity_index = max(1, min(10, np.random.normal(6.5, 1.2)))
+            learning_outcome_achievement = max(50, min(95, np.random.normal(75, 8)))
+            patents_filed = np.random.poisson(yearly_variation * 3)
+            industry_collaborations = np.random.poisson(yearly_variation * 6)
+            renewable_energy_usage = max(0, min(100, np.random.normal(25, 15)))
+            governance_transparency = max(1, min(10, np.random.normal(7, 1.3)))
+            campus_area = max(10, np.random.normal(50, 20))
+            research_investment_pct = max(5, min(30, np.random.normal(15, 5)))
+            
+            # Calculate overall performance score
+            performance_score = calculate_comprehensive_performance(
+                naac_grade, nirf_rank, student_faculty_ratio, phd_faculty_ratio,
+                placement_rate, research_publications, digital_infrastructure,
+                financial_stability, community_projects, curriculum_framework_score,
+                learning_outcome_achievement, patents_filed, governance_transparency
+            )
+            
+            institution_data = {
+                'institution_id': f'INST_{inst_id:04d}',
+                'institution_name': f'{inst_type.split()[0]} {inst_id:03d}',
+                'year': year,
+                'institution_type': inst_type,
+                'state': state,
+                'established_year': np.random.randint(1950, 2010),
+                
+                # Academic Metrics
+                'naac_grade': naac_grade,
+                'nirf_ranking': nirf_rank,
+                'student_faculty_ratio': round(student_faculty_ratio, 1),
+                'phd_faculty_ratio': round(phd_faculty_ratio, 3),
+                'placement_rate': round(placement_rate, 1),
+                'higher_education_rate': round(max(5, min(50, np.random.normal(20, 8))), 1),
+                
+                # Research & Infrastructure
+                'research_publications': research_publications,
+                'research_grants_amount': research_grants,
+                'patents_filed': patents_filed,
+                'industry_collaborations': industry_collaborations,
+                'digital_infrastructure_score': round(digital_infrastructure, 1),
+                'library_volumes': library_volumes,
+                'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
+                
+                # Governance & Social Impact
+                'financial_stability_score': round(financial_stability, 1),
+                'compliance_score': round(compliance_score, 1),
+                'administrative_efficiency': round(administrative_efficiency, 1),
+                'community_projects': community_projects,
+                'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
+                
+                # Additional Systematic Form Metrics
+                'curriculum_framework_score': round(curriculum_framework_score, 1),
+                'faculty_diversity_index': round(faculty_diversity_index, 1),
+                'learning_outcome_achievement': round(learning_outcome_achievement, 1),
+                'renewable_energy_usage': round(renewable_energy_usage, 1),
+                'governance_transparency_score': round(governance_transparency, 1),
+                'campus_area': round(campus_area, 1),
+                'research_investment_percentage': round(research_investment_pct, 1),
+                'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
+                
+                # Overall Performance
+                'performance_score': round(performance_score, 2),
+                'approval_recommendation': generate_approval_recommendation(performance_score),
+                'risk_level': assess_risk_level(performance_score)
+            }
+            
+            institutions_data.append(institution_data)
+    
+    return pd.DataFrame(institutions_data)
+
+def calculate_comprehensive_performance(*args):
+    """Calculate overall performance score from multiple metrics"""
+    score = 5.0  # Base score
+    
+    # Add contributions from various metrics
+    metrics = list(args)
+    
+    # NAAC Grade
+    if metrics[0] in ['A++', 'A+', 'A']:
+        score += 1.5
+    elif metrics[0] in ['B++', 'B+']:
+        score += 0.5
+    
+    # NIRF Ranking
+    if metrics[1] and metrics[1] <= 100:
+        score += 1.0
+    elif metrics[1] and metrics[1] <= 200:
+        score += 0.5
+    
+    # Student-Faculty Ratio (lower is better)
+    if metrics[2] <= 15:
+        score += 1.0
+    elif metrics[2] <= 20:
+        score += 0.5
+    
+    # Other metrics contribute proportionally
+    numeric_metrics = [m for m in metrics[3:] if isinstance(m, (int, float))]
+    if numeric_metrics:
+        avg_metric_score = sum(numeric_metrics) / len(numeric_metrics)
+        score += (avg_metric_score - 5) * 0.5  # Normalize contribution
+    
+    return max(1.0, min(10.0, score))
+
+def generate_approval_recommendation(performance_score):
+    """Generate approval recommendation based on performance score"""
+    if performance_score >= 8.0:
+        return "Full Approval - 5 Years"
+    elif performance_score >= 7.0:
+        return "Provisional Approval - 3 Years"
+    elif performance_score >= 6.0:
+        return "Conditional Approval - 1 Year"
+    elif performance_score >= 5.0:
+        return "Approval with Strict Monitoring - 1 Year"
+    else:
+        return "Rejection - Significant Improvements Required"
+
+def assess_risk_level(performance_score):
+    """Assess institutional risk level"""
+    if performance_score >= 8.0:
+        return "Low Risk"
+    elif performance_score >= 6.5:
+        return "Medium Risk"
+    elif performance_score >= 5.0:
+        return "High Risk"
+    else:
+        return "Critical Risk"
 def create_approval_workflow(analyzer):
     st.header("🔄 AI-Enhanced Approval Workflow")
     
