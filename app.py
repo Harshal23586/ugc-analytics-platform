@@ -30,6 +30,7 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import random   # ← ADD THIS
 
 # Streamlit
 import streamlit as st
