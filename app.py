@@ -1129,21 +1129,8 @@ def create_institution_dashboard(analyzer, user):
         return
         
     st.markdown(f'<div class="main-header">🏛️ {user.get("institution_name", "Unknown")} Dashboard</div>', unsafe_allow_html=True)
-    
-    # Get institution data
-    institution_data = analyzer.historical_data[
-        analyzer.historical_data['institution_id'] == user['institution_id']
-    ].iloc[0] if not analyzer.historical_data[
-        analyzer.historical_data['institution_id'] == user['institution_id']
-    ].empty else None
-    
-    if institution_data is not None:
-        # Create beautiful accreditation dashboard for the institution
-        scores, overall_score, status = analyzer.accreditation_analyzer.create_accreditation_dashboard(
-            institution_data, user['institution_name']
-        )
-    
-    # Navigation for institution users
+
+     # Navigation for institution users
     institution_tabs = st.tabs([
         "📤 Document Upload", 
         "📝 Data Submission", 
@@ -1168,6 +1155,19 @@ def create_institution_dashboard(analyzer, user):
     with institution_tabs[3]:
         st.markdown('<div class="section-header">Approval Requirements Guide</div>', unsafe_allow_html=True)
         # Add requirements guide functionality here
+    
+    # Get institution data
+    institution_data = analyzer.historical_data[
+        analyzer.historical_data['institution_id'] == user['institution_id']
+    ].iloc[0] if not analyzer.historical_data[
+        analyzer.historical_data['institution_id'] == user['institution_id']
+    ].empty else None
+    
+    if institution_data is not None:
+        # Create beautiful accreditation dashboard for the institution
+        scores, overall_score, status = analyzer.accreditation_analyzer.create_accreditation_dashboard(
+            institution_data, user['institution_name']
+        )
 
 def create_accreditation_analytics_dashboard(analyzer):
     """Enhanced accreditation analytics dashboard for multiple institutions"""
