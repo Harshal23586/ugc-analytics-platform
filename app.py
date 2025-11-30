@@ -1,25 +1,36 @@
-# app_optimized.py
+# app.py
 """
-Optimized single-file Streamlit app:
-- Institutional approval system with RAG-based doc extraction (simple)
-- SQLite-backed sample data
-- Streamlined UI (login, upload, RAG analysis, dashboards)
-- Caching for embeddings & heavy ops
-- Single-file, readable structure
+Single-file Streamlit application for:
+- Generating dummy 10-year dataset for 20 institutions (Appendix-1 framework)
+- Document checklist (mandatory/supporting) per institution-year
+- Composite scoring, approval recommendation, risk levels
+- RAG-style doc extraction (optional embeddings)
+- Dashboards, heatmaps, per-institution downloadable reports (HTML/CSV)
 """
-import streamlit as st
-import pandas as pd
-import numpy as np
-import sqlite3
+
+# Standard libraries
+import os
+import io
 import json
 import re
 import hashlib
+import random
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Tuple
-import io
-import os
+from typing import List, Dict, Any, Optional
 
-# Optional heavy deps
+# Data + plotting
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+
+# Persistence and docs
+import sqlite3
+
+# Streamlit
+import streamlit as st
+
+# Optional heavy deps (graceful)
 try:
     from sentence_transformers import SentenceTransformer
     from sklearn.metrics.pairwise import cosine_similarity
@@ -37,644 +48,649 @@ try:
 except Exception:
     docx = None
 
-# Visualization
-import plotly.express as px
+# Try reportlab for PDF export (optional)
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.pdfgen import canvas
+except Exception:
+    reportlab = None
 
-# -----------------------------
-# Utility & Config
-# -----------------------------
-st.set_page_config(page_title="AI-Powered Institutional Approval (Optimized)", layout="wide", page_icon="🏛️")
-
-DB_PATH = "institutions.db"
+# ---------------------------
+# CONFIG
+# ---------------------------
+DATA_DIR = "/mnt/data/hackathon_generated"
+os.makedirs(DATA_DIR, exist_ok=True)
+CSV_FULL = os.path.join(DATA_DIR, "institutions_10yrs_20inst.csv")
+CSV_DOCS = os.path.join(DATA_DIR, "institution_documents_10yrs_20inst.csv")
+CSV_SUM = os.path.join(DATA_DIR, "institutions_summary.csv")
+DB_PATH = os.path.join(DATA_DIR, "institutions.db")
 EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
 
-# -----------------------------
-# Simple helpers
-# -----------------------------
+st.set_page_config(page_title="AI Institutional Approval - Hackathon 2025", layout="wide", page_icon="🏛️")
+
+# ---------------------------
+# Utilities
+# ---------------------------
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
-def safe_get(d: dict, k: str, default=None):
-    return d.get(k, default)
+def save_csv(df: pd.DataFrame, path: str):
+    df.to_csv(path, index=False)
+    return path
 
-# -----------------------------
-# Caching: create DB connection once
-# -----------------------------
-@st.cache_resource
-def get_db_conn(path: str = DB_PATH):
-    conn = sqlite3.connect(path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+def read_csv_if_exists(path: str) -> Optional[pd.DataFrame]:
+    if os.path.exists(path):
+        return pd.read_csv(path)
+    return None
 
-# -----------------------------
-# Embedding model manager (cached)
-# -----------------------------
-@st.cache_resource
-def load_embedding_model(model_name: str = EMBED_MODEL_NAME):
-    if SentenceTransformer is None:
-        return None
-    try:
-        model = SentenceTransformer(model_name)
-        return model
-    except Exception as e:
-        st.warning(f"Embedding model load failed: {e}")
-        return None
+# ---------------------------
+# Data generation (Appendix-1 guided)
+# ---------------------------
+def generate_dummy_dataset(force=False):
+    # If CSV exists and not forcing, load it
+    if not force and os.path.exists(CSV_FULL) and os.path.exists(CSV_DOCS) and os.path.exists(CSV_SUM):
+        df = pd.read_csv(CSV_FULL)
+        df_docs = pd.read_csv(CSV_DOCS)
+        summary = pd.read_csv(CSV_SUM)
+        return df, df_docs, summary
 
-# -----------------------------
-# Simple Vector Store (in-memory)
-# -----------------------------
-class SimpleVectorStore:
-    def __init__(self, texts: List[str] = None, embeddings: np.ndarray = None):
-        self.texts = texts or []
-        self.embeddings = np.array(embeddings) if embeddings is not None else np.array([])
+    random.seed(42)
+    np.random.seed(42)
 
-    def build(self, texts: List[str], embeddings: np.ndarray):
-        self.texts = texts
-        self.embeddings = np.array(embeddings)
+    # Create 20 institutions (mix)
+    inst_names = []
+    for i in range(5):
+        inst_names.append(f"IIT Example {i+1}")
+    for i in range(5):
+        inst_names.append(f"State Univ {i+1}")
+    for i in range(5):
+        inst_names.append(f"Private Univ {i+1}")
+    for i in range(5):
+        inst_names.append(f"Specialised Inst {i+1}")
 
-    def is_empty(self):
-        return self.embeddings.size == 0
+    institution_templates = []
+    categories = [
+        "Multi-disciplinary Education and Research-Intensive",
+        "Research-Intensive",
+        "Teaching-Intensive",
+        "Specialised Streams",
+        "Vocational and Skill-Intensive",
+        "Community Engagement & Service",
+        "Rural & Remote location"
+    ]
+    heritage = ["Old and Established", "New and Upcoming"]
 
-    def query(self, model, query_text: str, k: int = 5):
-        if self.is_empty() or model is None:
-            return []
-        q_emb = model.encode([query_text])
-        sims = cosine_similarity(q_emb, self.embeddings)[0]
-        idxs = np.argsort(sims)[-k:][::-1]
-        results = []
-        for i in idxs:
-            if sims[i] > 0:
-                results.append({"text": self.texts[i], "score": float(sims[i])})
-        return results
+    for idx, name in enumerate(inst_names):
+        i_id = f"HEI_{idx+1:02d}"
+        inst_type = random.choice(categories)
+        heritage_cat = random.choice(heritage)
+        institution_templates.append((i_id, name, inst_type, heritage_cat))
 
-# -----------------------------
-# RAG extractor simplified (text extraction + optional vector store)
-# -----------------------------
-class RAGExtractor:
-    def __init__(self, model: Optional[SentenceTransformer] = None):
-        self.model = model
-        self.texts: List[str] = []
-        self.vector_store = SimpleVectorStore()
+    years = list(range(2016, 2016 + 10))
+
+    # Document lists
+    mandatory_docs = [
+        "Institution Profile (SSR)", "Faculty Roster", "Program Curriculum Document",
+        "Accreditation/Approval Certificates", "Audited Financial Statements (last 3 years)",
+        "Student Enrollment Data", "Examination Results Summary", "Library & Lab Inventory"
+    ]
+    supporting_docs = [
+        "Research Publications List", "Patents & IPR filings", "Alumni Placement Reports",
+        "External Collaboration MOUs", "Community Engagement Reports", "Student Feedback Surveys",
+        "Teacher Development Records", "Annual Reports"
+    ]
+
+    # metric groups and generator
+    def generate_metrics(inst_type: str, heritage_type: str, year: int):
+        base = {}
+        # curriculum
+        base["curriculum_relevance"] = np.clip(np.random.normal(7.0, 1.0), 3.0, 9.5)
+        base["curriculum_updates_per_year"] = int(np.clip(np.random.poisson(1 if "Teaching" in inst_type else 2), 0, 6))
+        # faculty
+        if "Research" in inst_type:
+            base["faculty_fte_per_100_students"] = np.clip(np.random.normal(18, 4), 6, 40)
+            base["faculty_phd_pct"] = np.clip(np.random.normal(45, 15), 5, 90)
+        else:
+            base["faculty_fte_per_100_students"] = np.clip(np.random.normal(12, 3), 4, 30)
+            base["faculty_phd_pct"] = np.clip(np.random.normal(25, 10), 2, 70)
+        base["faculty_training_score"] = np.clip(np.random.normal(6.5, 1.5), 2.0, 9.5)
+        # research
+        if "Research" in inst_type or "Multi-disciplinary" in inst_type:
+            base["research_publications_count"] = int(np.clip(np.random.poisson(20), 0, 500))
+            base["research_citations_per_pub"] = np.clip(np.random.normal(4.0, 2.0), 0.0, 50.0)
+            base["patents_filed"] = int(np.clip(np.random.poisson(2), 0, 50))
+        else:
+            base["research_publications_count"] = int(np.clip(np.random.poisson(3), 0, 50))
+            base["research_citations_per_pub"] = np.clip(np.random.normal(1.0, 0.5), 0.0, 10.0)
+            base["patents_filed"] = int(np.clip(np.random.poisson(0.2), 0, 10))
+        base["lab_capacity_index"] = np.clip(np.random.normal(6.5, 1.5), 1.0, 10.0)
+        base["library_resources_index"] = np.clip(np.random.normal(6.0, 1.5), 1.0, 10.0)
+        base["digital_resources_index"] = np.clip(np.random.normal(6.0, 2.0), 1.0, 10.0)
+        base["gov_transparency_score"] = np.clip(np.random.normal(6.5, 1.5), 2.0, 9.5)
+        base["grievance_resolution_time_days"] = int(np.clip(np.random.normal(30, 20), 1, 365))
+        base["autonomy_index"] = np.clip(np.random.normal(5.5, 2.0), 1.0, 10.0)
+        base["financial_stability_score"] = np.clip(np.random.normal(6.5, 1.8), 1.0, 10.0)
+        base["research_funding_per_fte"] = np.clip(np.random.normal(50000 if "Research" in inst_type else 5000, 20000), 0, 1e6)
+        base["infrastructure_spend_pct"] = np.clip(np.random.normal(8 if heritage_type == "Old and Established" else 12, 4), 1, 50)
+        base["graduation_rate_pct"] = np.clip(np.random.normal(78, 10), 30, 99)
+        base["placements_pct"] = np.clip(np.random.normal(65 if "Research" in inst_type else 50, 20), 0, 100)
+        base["student_satisfaction_score"] = np.clip(np.random.normal(7.0, 1.5), 2.0, 9.5)
+        trend = (year - years[0]) * np.random.normal(0.05, 0.1)
+        base["curriculum_relevance"] = np.clip(base["curriculum_relevance"] + trend, 1, 10)
+        base["student_satisfaction_score"] = np.clip(base["student_satisfaction_score"] + trend / 2, 1, 10)
+        base["research_publications_count"] = max(0, int(base["research_publications_count"] * (1 + trend * 0.1)))
+        return base
+
+    rows = []
+    doc_rows = []
+    for inst_id, inst_name, inst_type, heritage_cat in institution_templates:
+        for year in years:
+            m = generate_metrics(inst_type, heritage_cat, year)
+            # weights for composite
+            weights = {
+                "curriculum_relevance": 0.12, "faculty_fte_per_100_students": 0.08, "faculty_phd_pct": 0.08,
+                "research_publications_count": 0.15, "research_citations_per_pub": 0.07, "patents_filed": 0.03,
+                "lab_capacity_index": 0.06, "digital_resources_index": 0.05, "library_resources_index": 0.04,
+                "gov_transparency_score": 0.05, "financial_stability_score": 0.10, "graduation_rate_pct": 0.10,
+                "placements_pct": 0.07
+            }
+            # normalization map
+            nm = {
+                "curriculum_relevance": (1,10),
+                "faculty_fte_per_100_students": (4,40),
+                "faculty_phd_pct": (0,90),
+                "research_publications_count": (0,200),
+                "research_citations_per_pub": (0,10),
+                "patents_filed": (0,20),
+                "lab_capacity_index": (1,10),
+                "digital_resources_index": (1,10),
+                "library_resources_index": (1,10),
+                "gov_transparency_score": (1,10),
+                "financial_stability_score": (1,10),
+                "graduation_rate_pct": (30,100),
+                "placements_pct": (0,100)
+            }
+            def norm(v, a, b): 
+                if b<=a: return 0.0
+                return float((v - a) / (b - a))
+            composite = 0.0
+            for k,w in weights.items():
+                v = m.get(k, 0)
+                a,b = nm.get(k,(0,1))
+                composite += norm(v,a,b) * w
+            composite_score = round(composite * 100, 2)
+
+            if composite_score >= 75:
+                risk = "Low"
+                recommendation = "Full Approval - 5 Years"
+            elif composite_score >= 60:
+                risk = "Medium"
+                recommendation = "Provisional Approval - 3 Years"
+            elif composite_score >= 45:
+                risk = "High"
+                recommendation = "Conditional Approval - 1 Year"
+            else:
+                risk = "Critical"
+                recommendation = "Rejection / Requires Major Improvement"
+
+            # documents probabilistic
+            doc_prob_base = composite_score / 120.0
+            mand_present = 0
+            for d in mandatory_docs:
+                submitted = np.random.rand() < min(0.95, max(0.2, doc_prob_base + np.random.normal(0,0.1)))
+                mand_present += 1 if submitted else 0
+                doc_rows.append({
+                    "institution_id": inst_id, "year": year, "document_name": d, "category": "mandatory", "submitted": submitted
+                })
+            supp_present = 0
+            for d in supporting_docs:
+                submitted = np.random.rand() < min(0.9, max(0.05, doc_prob_base - 0.1 + np.random.normal(0,0.18)))
+                supp_present += 1 if submitted else 0
+                doc_rows.append({
+                    "institution_id": inst_id, "year": year, "document_name": d, "category": "supporting", "submitted": submitted
+                })
+            total_mand = len(mandatory_docs)
+            total_supp = len(supporting_docs)
+            mand_pct = round((mand_present / total_mand) * 100, 2)
+            overall_pct = round(((mand_present + supp_present) / (total_mand + total_supp) * 100), 2)
+            row = {
+                "institution_id": inst_id,
+                "institution_name": inst_name,
+                "year": year,
+                "institution_type": inst_type,
+                "heritage_category": heritage_cat,
+                **m,
+                "composite_score": composite_score,
+                "risk_level": risk,
+                "approval_recommendation": recommendation,
+                "mandatory_documents_present": mand_present,
+                "total_mandatory_documents": total_mand,
+                "supporting_documents_present": supp_present,
+                "total_supporting_documents": total_supp,
+                "mandatory_sufficiency_pct": mand_pct,
+                "overall_document_sufficiency_pct": overall_pct
+            }
+            rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df_docs = pd.DataFrame(doc_rows)
+    # summary average per institution
+    summary = df.groupby(["institution_id","institution_name","institution_type","heritage_category"]).agg({
+        "composite_score":"mean",
+        "mandatory_sufficiency_pct":"mean",
+        "overall_document_sufficiency_pct":"mean",
+        "research_publications_count":"mean",
+        "placements_pct":"mean",
+        "graduation_rate_pct":"mean"
+    }).reset_index()
+    summary = summary.round(2)
+    save_csv(df, CSV_FULL)
+    save_csv(df_docs, CSV_DOCS)
+    save_csv(summary, CSV_SUM)
+    return df, df_docs, summary
+
+# ---------------------------
+# Simple RAG extractor (optional embeddings)
+# ---------------------------
+class SimpleRAG:
+    def __init__(self, model_name=EMBED_MODEL_NAME):
+        self.model = None
+        self.texts = []
+        self.embeddings = None
+        self.model_name = model_name
+        if SentenceTransformer:
+            try:
+                self.model = SentenceTransformer(model_name)
+            except Exception as e:
+                st.warning(f"Embedding model load failed: {e}")
+                self.model = None
 
     def extract_text_from_file(self, uploaded_file) -> str:
-        # file-like object
         name = uploaded_file.name.lower()
         try:
             if name.endswith(".pdf") and PyPDF2:
                 reader = PyPDF2.PdfReader(uploaded_file)
                 pages = []
                 for p in reader.pages:
-                    txt = p.extract_text()
-                    if txt:
-                        pages.append(txt)
+                    txt = p.extract_text() or ""
+                    pages.append(txt)
                 return "\n".join(pages)
             elif (name.endswith(".docx") or name.endswith(".doc")) and docx:
-                doc = docx.Document(uploaded_file)
-                return "\n".join([p.text for p in doc.paragraphs])
-            elif name.endswith(".txt"):
-                raw = uploaded_file.getvalue()
-                try:
-                    return raw.decode("utf-8")
-                except Exception:
-                    return raw.decode("latin-1", errors="ignore")
-            elif name.endswith((".xlsx", ".xls")):
-                # convert sheets to csv-like text
-                try:
-                    df = pd.read_excel(uploaded_file)
-                    return df.to_string()
-                except Exception:
-                    return ""
+                d = docx.Document(uploaded_file)
+                return "\n".join([p.text for p in d.paragraphs])
             else:
-                # unknown binary - try decode
+                content = uploaded_file.getvalue()
                 try:
-                    return uploaded_file.getvalue().decode("utf-8", errors="ignore")
+                    return content.decode("utf-8")
                 except Exception:
-                    return ""
+                    return content.decode("latin-1", errors="ignore")
         except Exception as e:
-            st.error(f"Failed to extract {uploaded_file.name}: {e}")
+            st.warning(f"File text extraction failed ({uploaded_file.name}): {e}")
             return ""
 
-    def clean_text(self, text: str) -> str:
-        text = re.sub(r'\s+', ' ', text)
-        text = text.strip()
-        return text
-
-    def split_into_chunks(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
-        if not text:
-            return []
-        sentences = re.split(r'(?<=[\.\?\!])\s+', text)
-        chunks = []
-        current = ""
-        for s in sentences:
-            if len(current) + len(s) + 1 > chunk_size:
-                chunks.append(current.strip())
-                # overlap last N chars
-                if overlap > 0:
-                    current = current[-overlap:] + " " + s
-                else:
-                    current = s
-            else:
-                current = current + " " + s if current else s
-        if current:
-            chunks.append(current.strip())
-        return chunks
-
-    def prepare_documents(self, files: List) -> List[str]:
-        texts = []
+    def prepare(self, files: List):
+        self.texts = []
         for f in files:
-            raw = self.extract_text_from_file(f)
-            cleaned = self.clean_text(raw)
-            if cleaned:
-                chunks = self.split_into_chunks(cleaned)
-                texts.extend(chunks if chunks else [cleaned])
-        self.texts = texts
-        return texts
-
-    def build_vector_store(self, batch_size: int = 32):
-        if self.model is None or not self.texts:
-            return
-        # batch encode
-        embeddings = []
-        for i in range(0, len(self.texts), batch_size):
-            batch = self.texts[i:i+batch_size]
+            t = self.extract_text_from_file(f)
+            if t:
+                # chunk lightly
+                chunks = re.split(r'(?<=[\.\?\!])\s+', t)
+                self.texts.extend([c.strip() for c in chunks if c.strip()])
+        # build embeddings
+        if self.model and self.texts:
             try:
-                emb = self.model.encode(batch)
-                embeddings.extend(emb)
+                self.embeddings = self.model.encode(self.texts, show_progress_bar=False)
             except Exception as e:
-                st.warning(f"Batch embedding failed: {e}")
-                return
-        self.vector_store.build(self.texts, np.vstack(embeddings))
+                st.warning(f"Embedding failure: {e}")
+                self.embeddings = None
 
-    def query(self, query_text: str, k: int = 5):
-        return self.vector_store.query(self.model, query_text, k)
+    def query(self, q: str, topk: int = 5):
+        if self.model is None or self.embeddings is None or len(self.texts)==0:
+            return []
+        qemb = self.model.encode([q])
+        sims = cosine_similarity(qemb, self.embeddings)[0]
+        idxs = np.argsort(sims)[-topk:][::-1]
+        results = [{"text": self.texts[i], "score": float(sims[i])} for i in idxs if sims[i] > 0]
+        return results
 
-# -----------------------------
-# Analyzer: scoring & DB
-# -----------------------------
-class InstitutionalAIAnalyzer:
-    def __init__(self, conn: sqlite3.Connection):
-        self.conn = conn
-        self.ensure_schema()
-        self.historical_data = self.load_or_generate_sample_data()
-        self.embedding_model = load_embedding_model()
-        # RAG extractor per session
-        self.rag = RAGExtractor(self.embedding_model)
+# ---------------------------
+# PDF / HTML report generation helpers
+# ---------------------------
+def generate_html_report(inst_df: pd.DataFrame, inst_docs: pd.DataFrame, inst_info: Dict[str,Any]) -> str:
+    # produce simple HTML string
+    html = []
+    html.append(f"<html><head><meta charset='utf-8'><title>Report - {inst_info['institution_name']}</title></head><body>")
+    html.append(f"<h1>{inst_info['institution_name']} ({inst_info['institution_id']})</h1>")
+    html.append(f"<p><b>Type:</b> {inst_info['institution_type']} | <b>Heritage:</b> {inst_info['heritage_category']}</p>")
+    html.append("<h2>Recent Performance (last 3 years)</h2>")
+    last = inst_df.sort_values('year', ascending=False).head(3)
+    html.append("<table border='1' cellpadding='4'><tr><th>Year</th><th>Composite Score</th><th>Risk Level</th><th>Approval Recommendation</th><th>Mand. Suff.%</th><th>Overall Suff.%</th></tr>")
+    for _,r in last.iterrows():
+        html.append(f"<tr><td>{int(r['year'])}</td><td>{r['composite_score']}</td><td>{r['risk_level']}</td><td>{r['approval_recommendation']}</td><td>{r['mandatory_sufficiency_pct']}</td><td>{r['overall_document_sufficiency_pct']}</td></tr>")
+    html.append("</table>")
+    html.append("<h2>Summary Metrics (averaged)</h2>")
+    avg = inst_df.mean(numeric_only=True).to_dict()
+    html.append("<ul>")
+    for k in ["research_publications_count","placements_pct","graduation_rate_pct","financial_stability_score","student_satisfaction_score"]:
+        html.append(f"<li><b>{k}:</b> {avg.get(k, 'N/A'):.2f}</li>")
+    html.append("</ul>")
+    html.append("<h2>Document Checklist (latest year)</h2>")
+    latest_year = inst_docs['year'].max()
+    ddf = inst_docs[inst_docs['year']==latest_year]
+    html.append(f"<p><b>Year:</b> {int(latest_year)}</p>")
+    html.append("<table border='1' cellpadding='4'><tr><th>Document</th><th>Category</th><th>Submitted</th></tr>")
+    for _,d in ddf.iterrows():
+        html.append(f"<tr><td>{d['document_name']}</td><td>{d['category']}</td><td>{'Yes' if d['submitted'] else 'No'}</td></tr>")
+    html.append("</table>")
+    html.append("</body></html>")
+    return "\n".join(html)
 
-    def ensure_schema(self):
-        cur = self.conn.cursor()
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS institutions (
-            id INTEGER PRIMARY KEY,
-            institution_id TEXT UNIQUE,
-            institution_name TEXT,
-            year INTEGER,
-            institution_type TEXT,
-            heritage_category TEXT,
-            state TEXT,
-            established_year INTEGER,
-            overall_score REAL,
-            approval_recommendation TEXT,
-            risk_level TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS institution_users (
-            id INTEGER PRIMARY KEY,
-            institution_id TEXT,
-            username TEXT UNIQUE,
-            password_hash TEXT,
-            contact_person TEXT,
-            email TEXT,
-            phone TEXT,
-            role TEXT DEFAULT 'Institution',
-            is_active INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS rag_analysis (
-            id INTEGER PRIMARY KEY,
-            institution_id TEXT,
-            analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            extracted_data TEXT,
-            ai_insights TEXT,
-            confidence_score REAL
-        )''')
-        cur.execute('''
-        CREATE TABLE IF NOT EXISTS institution_documents (
-            id INTEGER PRIMARY KEY,
-            institution_id TEXT,
-            document_name TEXT,
-            document_type TEXT,
-            upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            status TEXT DEFAULT 'Uploaded'
-        )''')
-        self.conn.commit()
+def html_to_bytes_dl(name: str, html_str: str):
+    b = html_str.encode('utf-8')
+    return b
 
-    def seed_system_users(self):
-        # Create some system users if missing (non-sensitive simple seed)
-        cur = self.conn.cursor()
-        seeds = [
-            ("ugc_officer", "ugc123", "UGC Officer", "ugc.officer@ugc.gov.in"),
-            ("aicte_officer", "aicte123", "AICTE Officer", "aicte.officer@aicte.gov.in"),
-        ]
-        for username, pwd, role, email in seeds:
-            cur.execute("SELECT * FROM institution_users WHERE username = ?", (username,))
-            if cur.fetchone() is None:
-                cur.execute('''
-                    INSERT INTO institution_users (institution_id, username, password_hash, contact_person, email, phone, role)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', ("SYSTEM", username, sha256(pwd), role + " Contact", email, "", "System"))
-        self.conn.commit()
+# ---------------------------
+# Database helpers (lightweight)
+# ---------------------------
+@st.cache_resource
+def get_db_conn(path=DB_PATH):
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    def load_or_generate_sample_data(self) -> pd.DataFrame:
-        # try load; if empty, generate sample dataset for 20 institutions and multiple years
-        try:
-            df = pd.read_sql('SELECT * FROM institutions', self.conn)
-            if len(df) > 0:
-                return df
-        except Exception:
-            pass
-        # generate compact sample
-        np.random.seed(42)
-        base_insts = [
-            ("HEI_01", "IIT Varanasi", "Multi-disciplinary", "Old"),
-            ("HEI_02", "NIT Srinagar", "Research-Intensive", "Old"),
-            ("HEI_03", "State University Bengaluru", "Teaching-Intensive", "Old"),
-            ("HEI_04", "National Law School Delhi", "Specialised", "New"),
-            ("HEI_05", "NSDI Pune", "Vocational", "New"),
-            ("HEI_06", "RGU Community Health", "Community", "New"),
-            ("HEI_07", "Himalayan Rural Institute", "Rural", "Old"),
-        ]
-        rows = []
-        for inst_id, name, itype, heritage in base_insts:
-            for y in range(2018, 2024):
-                overall = round(np.clip(np.random.normal(7.0, 1.0), 3.0, 9.5), 2)
-                rows.append({
-                    "institution_id": inst_id,
-                    "institution_name": name,
-                    "year": y,
-                    "institution_type": itype,
-                    "heritage_category": heritage,
-                    "state": "State",
-                    "established_year": 1990,
-                    "overall_score": overall,
-                    "approval_recommendation": self.generate_approval_recommendation(overall),
-                    "risk_level": self.assess_risk_level(overall)
-                })
-        df = pd.DataFrame(rows)
-        df.to_sql('institutions', self.conn, if_exists='replace', index=False)
-        return df
+def init_db(conn: sqlite3.Connection):
+    cur = conn.cursor()
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS institution_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        institution_id TEXT,
+        year INTEGER,
+        document_name TEXT,
+        document_type TEXT,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'Uploaded'
+    )
+    ''')
+    cur.execute('''
+    CREATE TABLE IF NOT EXISTS rag_analysis (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        institution_id TEXT,
+        analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        extracted_data TEXT,
+        ai_insights TEXT,
+        confidence REAL
+    )
+    ''')
+    conn.commit()
 
-    # scoring helpers
-    def generate_approval_recommendation(self, score: float) -> str:
-        if score >= 8.0:
-            return "Full Approval - 5 Years"
-        elif score >= 7.0:
-            return "Provisional Approval - 3 Years"
-        elif score >= 6.0:
-            return "Conditional Approval - 1 Year"
-        elif score >= 5.0:
-            return "Approval w/ Monitoring - 1 Year"
-        else:
-            return "Rejection"
+# ---------------------------
+# Build app UI
+# ---------------------------
+def main():
+    st.title("🏛️ AI-based Institutional Approval — Hackathon 2025")
+    st.markdown("""
+    **Goal:** Generate AI analysis and performance indicators for higher education institutions 
+    (10 years × 20 institutions), produce approval recommendations, compute document sufficiency, 
+    provide RAG-style doc analysis, downloadable reports, and visual dashboards.
+    """)
 
-    def assess_risk_level(self, score: float) -> str:
-        if score >= 8.0:
-            return "Low Risk"
-        elif score >= 6.5:
-            return "Medium Risk"
-        elif score >= 5.0:
-            return "High Risk"
-        else:
-            return "Critical Risk"
+    # Generate or load dataset
+    with st.expander("Dataset generation / load"):
+        st.write("Generate or load the synthetic dataset (10 years × 20 institutions).")
+        col1, col2, col3 = st.columns([1,1,2])
+        with col1:
+            if st.button("Generate dataset (force)"):
+                df, df_docs, summary = generate_dummy_dataset(force=True)
+                st.success("Dataset generated and saved.")
+        with col2:
+            if st.button("Load dataset (if exists)"):
+                df, df_docs, summary = generate_dummy_dataset(force=False)
+                st.success("Dataset loaded.")
+        with col3:
+            st.write("Files are saved to `/mnt/data/hackathon_generated` by default.")
+        # ensure loaded for UI
+    # ensure dataset available
+    df, df_docs, summary = generate_dummy_dataset(force=False)
 
-    # user management
-    def create_institution_user(self, institution_id: str, username: str, password: str, contact_person: str, email: str, phone: str) -> bool:
-        cur = self.conn.cursor()
-        try:
-            cur.execute('''
-            INSERT INTO institution_users (institution_id, username, password_hash, contact_person, email, phone)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ''', (institution_id, username, sha256(password), contact_person, email, phone))
-            self.conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
+    # Initialize DB
+    conn = get_db_conn()
+    init_db(conn)
 
-    def authenticate_institution_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
-        cur = self.conn.cursor()
-        cur.execute('''
-        SELECT iu.*, i.institution_name FROM institution_users iu
-        LEFT JOIN institutions i ON iu.institution_id = i.institution_id
-        WHERE iu.username = ? AND iu.is_active = 1
-        ''', (username,))
-        row = cur.fetchone()
-        if row:
-            rowd = dict(row)
-            if rowd.get("password_hash") == sha256(password):
-                return {
-                    "institution_id": rowd.get("institution_id"),
-                    "username": rowd.get("username"),
-                    "contact_person": rowd.get("contact_person"),
-                    "email": rowd.get("email"),
-                    "institution_name": rowd.get("institution_name") or rowd.get("institution_id")
-                }
-        return None
+    # Sidebar: login/register (simple institution user concept)
+    st.sidebar.header("User")
+    if 'user' not in st.session_state:
+        st.session_state['user'] = None
 
-    # document saving
-    def save_uploaded_documents(self, institution_id: str, uploaded_files: List, document_types: List[str]):
-        cur = self.conn.cursor()
-        for f, dtype in zip(uploaded_files, document_types):
-            cur.execute('''
-            INSERT INTO institution_documents (institution_id, document_name, document_type)
-            VALUES (?, ?, ?)
-            ''', (institution_id, f.name, dtype))
-        self.conn.commit()
-
-    def get_institution_documents(self, institution_id: str) -> pd.DataFrame:
-        try:
-            return pd.read_sql('SELECT * FROM institution_documents WHERE institution_id = ? ORDER BY upload_date DESC', self.conn, params=(institution_id,))
-        except Exception:
-            return pd.DataFrame([])
-
-    # RAG analysis orchestration (simple)
-    def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
-        # prepare texts
-        texts = self.rag.prepare_documents(uploaded_files)
-        if not texts:
-            return {"status": "Failed", "message": "No text extracted from files."}
-
-        # build vectors if possible
-        if self.embedding_model:
-            self.rag.build_vector_store()
-        else:
-            st.warning("Embedding model not available. RAG similarity disabled.")
-
-        # simple structured extraction using regex heuristics
-        combined = " ".join(texts)
-        extracted = self.extract_structured_data(combined)
-
-        # insights
-        insights = self.generate_ai_insights(extracted)
-
-        # persist rag_analysis record
-        cur = self.conn.cursor()
-        cur.execute('''
-        INSERT INTO rag_analysis (institution_id, extracted_data, ai_insights, confidence_score)
-        VALUES (?, ?, ?, ?)
-        ''', (institution_id, json.dumps(extracted), json.dumps(insights), 0.85))
-        self.conn.commit()
-
-        return {"status": "Analysis Complete", "extracted_data": extracted, "ai_insights": insights, "confidence_score": 0.85}
-
-    def extract_structured_data(self, text: str) -> Dict[str, Any]:
-        # minimal set of regex-based extractions for demo purposes
-        data = {
-            "academic_metrics": {},
-            "research_metrics": {},
-            "infrastructure_metrics": {},
-            "governance_metrics": {},
-            "financial_metrics": {},
-            "raw_text": text[:5000]
-        }
-        # examples
-        m = re.search(r'naac.*grade[:\s]*([A\+\-]+)', text, re.IGNORECASE)
-        if m:
-            data["academic_metrics"]["naac_grade"] = m.group(1)
-
-        m = re.search(r'research.*publications[:\s]*([0-9]+)', text, re.IGNORECASE)
-        if m:
-            data["research_metrics"]["research_publications"] = int(m.group(1))
-
-        m = re.search(r'patents.*filed[:\s]*([0-9]+)', text, re.IGNORECASE)
-        if m:
-            data["research_metrics"]["patents_filed"] = int(m.group(1))
-
-        m = re.search(r'financial.*stability[:\s]*([0-9]+(?:\.[0-9]+)?)', text, re.IGNORECASE)
-        if m:
-            data["financial_metrics"]["financial_stability_score"] = float(m.group(1))
-
-        # fallback heuristics (counts)
-        data["research_metrics"].setdefault("research_publications", int(re.findall(r'\b\d+\s+publications\b', text, re.IGNORECASE).__len__()))
-        return data
-
-    def generate_ai_insights(self, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
-        insights = {"strengths": [], "weaknesses": [], "recommendations": [], "risk_assessment": {}}
-        academic = extracted_data.get("academic_metrics", {})
-        research = extracted_data.get("research_metrics", {})
-        financial = extracted_data.get("financial_metrics", {})
-
-        # simple rules
-        naac = academic.get("naac_grade")
-        if naac in ("A++", "A+", "A"):
-            insights["strengths"].append(f"Strong NAAC accreditation: {naac}")
-        pubs = research.get("research_publications", 0)
-        if pubs and pubs > 50:
-            insights["strengths"].append("Robust research publication output")
-        if pubs and pubs < 5:
-            insights["weaknesses"].append("Low publication count")
-
-        patents = research.get("patents_filed", 0)
-        if patents < 2:
-            insights["recommendations"].append("Increase patenting and IPR activities")
-
-        fin = financial.get("financial_stability_score", 0)
-        if fin and fin < 6:
-            insights["weaknesses"].append("Financial stability score is low")
-            insights["recommendations"].append("Improve financial planning")
-
-        risk_score = 5.0
-        if naac in ("A++", "A+", "A"):
-            risk_score -= 1.5
-        if pubs > 30:
-            risk_score -= 1.0
-        if patents < 2:
-            risk_score += 1.0
-        level = "Low" if risk_score < 4 else "Medium" if risk_score < 7 else "High"
-        insights["risk_assessment"] = {"score": round(risk_score, 2), "level": level, "factors": []}
-        return insights
-
-# -----------------------------
-# Streamlit UI: pages and components
-# -----------------------------
-def sidebar_login_ui(analyzer: InstitutionalAIAnalyzer):
-    st.sidebar.title("🔐 Login / Register")
-    mode = st.sidebar.radio("Mode", ["Institution Login", "Register"])
-    if mode == "Institution Login":
-        user = st.sidebar.text_input("Username", key="ui_login_username")
-        pwd = st.sidebar.text_input("Password", type="password", key="ui_login_password")
-        if st.sidebar.button("Login"):
-            auth = analyzer.authenticate_institution_user(user, pwd)
-            if auth:
-                st.session_state['institution_user'] = auth
-                st.success(f"Welcome {auth.get('contact_person')}")
-                st.experimental_rerun()
-            else:
-                st.error("Invalid credentials")
-    else:
-        st.sidebar.markdown("Create a new institution user")
-        inst = st.sidebar.selectbox("Institution ID (sample)", analyzer.historical_data['institution_id'].unique())
-        username = st.sidebar.text_input("Username (new)", key="ui_reg_username")
-        pwd = st.sidebar.text_input("Password (new)", type="password", key="ui_reg_password")
-        confirm = st.sidebar.text_input("Confirm Password", type="password", key="ui_reg_confirm")
-        contact = st.sidebar.text_input("Contact Person", key="ui_reg_contact")
-        email = st.sidebar.text_input("Email", key="ui_reg_email")
-        phone = st.sidebar.text_input("Phone", key="ui_reg_phone")
-        if st.sidebar.button("Register"):
-            if not username or not pwd or not contact or not email:
-                st.sidebar.error("Fill required fields")
-            elif pwd != confirm:
-                st.sidebar.error("Passwords do not match")
-            else:
-                ok = analyzer.create_institution_user(inst, username, pwd, contact, email, phone)
-                if ok:
-                    st.sidebar.success("User created. Please login.")
+    if st.session_state['user'] is None:
+        mode = st.sidebar.selectbox("Mode", ["Guest", "Institution User"])
+        if mode == "Institution User":
+            username = st.sidebar.text_input("Username")
+            pwd = st.sidebar.text_input("Password", type="password")
+            if st.sidebar.button("Login"):
+                # simple mocked authentication: any username that matches institution id works (password ignored)
+                possible = summary[summary['institution_id']==username]
+                if not possible.empty:
+                    st.session_state['user'] = {"institution_id": username, "institution_name": possible.iloc[0]['institution_name']}
+                    st.sidebar.success("Logged in.")
+                    st.experimental_rerun()
                 else:
-                    st.sidebar.error("Username exists. Pick another.")
-
-def main_dashboard(analyzer: InstitutionalAIAnalyzer):
-    st.title("🏛️ AI-Powered Institutional Approval System (Optimized)")
-    st.markdown("A simplified and optimized single-file version of your institutional approval app.")
-
-    # top-level tabs
-    tabs = st.tabs(["Dashboard", "RAG Analyzer", "My Institution", "System"])
-    with tabs[0]:
-        performance_dashboard_ui(analyzer)
-    with tabs[1]:
-        rag_analyzer_ui(analyzer)
-    with tabs[2]:
-        institution_portal_ui(analyzer)
-    with tabs[3]:
-        system_ui(analyzer)
-
-# Dashboard UI
-def performance_dashboard_ui(analyzer: InstitutionalAIAnalyzer):
-    st.header("📊 Institutional Performance Dashboard")
-    df = analyzer.historical_data
-    if df.empty:
-        st.info("No data available.")
-        return
-    cur_year = st.selectbox("Select Year", sorted(df['year'].unique(), reverse=True), index=0)
-    df_year = df[df['year'] == cur_year]
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Institutions", df_year['institution_id'].nunique())
-    with col2:
-        st.metric("Avg Score", f"{df_year['overall_score'].mean():.2f}/10")
-    with col3:
-        st.metric("High Risk Count", int((df_year['overall_score'] < 6.0).sum()))
-    with col4:
-        st.metric("Max Score", f"{df_year['overall_score'].max():.2f}/10")
-    # histogram
-    fig = px.histogram(df_year, x="overall_score", nbins=15, title=f"Score Distribution ({cur_year})")
-    st.plotly_chart(fig, use_container_width=True)
-    # top institutions
-    st.subheader("Top Institutions")
-    top = df_year.nlargest(10, "overall_score")[['institution_id', 'institution_name', 'overall_score', 'approval_recommendation']]
-    st.dataframe(top.reset_index(drop=True))
-
-# RAG analyzer UI
-def rag_analyzer_ui(analyzer: InstitutionalAIAnalyzer):
-    st.header("🤖 RAG Document Analyzer")
-    inst_id = st.selectbox("Select Institution", analyzer.historical_data['institution_id'].unique())
-    uploaded_files = st.file_uploader("Upload Documents (pdf, docx, txt, xlsx)", accept_multiple_files=True, type=['pdf', 'docx', 'txt', 'xlsx'])
-    if uploaded_files:
-        st.success(f"{len(uploaded_files)} file(s) uploaded.")
-        # show file names
-        for f in uploaded_files:
-            st.write(f"- {f.name}")
-        # assign types quickly: default "other"
-        if st.button("Start RAG Analysis"):
-            with st.spinner("Extracting & analyzing..."):
-                # Save file metadata to DB
-                analyzer.save_uploaded_documents(inst_id, uploaded_files, ["uploaded"]*len(uploaded_files))
-                result = analyzer.analyze_documents_with_rag(inst_id, uploaded_files)
-                if result.get("status") == "Analysis Complete":
-                    st.success("RAG Analysis Complete")
-                    # show extracted pieces
-                    extracted = result.get("extracted_data", {})
-                    st.subheader("Extracted Metrics (Preview)")
-                    for k, v in extracted.items():
-                        if k == "raw_text":
-                            st.text_area("Raw Text Preview", v[:4000], height=200)
-                        else:
-                            st.write(f"**{k}**")
-                            st.json(v)
-                    st.subheader("AI Insights")
-                    st.json(result.get("ai_insights", {}))
-                else:
-                    st.error("RAG analysis failed: " + str(result.get("message", "Unknown")))
-
+                    st.sidebar.error("Username not found. Use 'Guest' or register in DB (not implemented).")
+        else:
+            st.sidebar.info("Browsing as Guest.")
     else:
-        st.info("Upload one or more documents to run RAG analysis.")
-
-# Institution portal UI
-def institution_portal_ui(analyzer: InstitutionalAIAnalyzer):
-    user = st.session_state.get("institution_user")
-    if not user:
-        st.info("Please login/create a user in the sidebar to access your institution portal.")
-        return
-    st.header(f"🏛️ Institution Portal — {user.get('institution_name')}")
-    inst_id = user.get("institution_id")
-    tabs = st.tabs(["Documents", "Submissions", "Profile"])
-    with tabs[0]:
-        st.subheader("Uploaded Documents")
-        df_docs = analyzer.get_institution_documents(inst_id)
-        if df_docs.empty:
-            st.info("No documents uploaded.")
-        else:
-            st.dataframe(df_docs[['document_name', 'document_type', 'upload_date', 'status']])
-        # quick upload
-        upl = st.file_uploader("Upload more docs", accept_multiple_files=True, type=['pdf','docx','txt','xlsx'])
-        if upl:
-            types = ["other"] * len(upl)
-            if st.button("Upload Documents for Institution"):
-                analyzer.save_uploaded_documents(inst_id, upl, types)
-                st.success("Uploaded.")
-    with tabs[1]:
-        st.subheader("Submissions")
-        subs = pd.read_sql('SELECT * FROM rag_analysis WHERE institution_id = ? ORDER BY analysis_date DESC', analyzer.conn, params=(inst_id,))
-        if subs.empty:
-            st.info("No previous analyses.")
-        else:
-            st.dataframe(subs[['analysis_date', 'confidence_score']])
-            if st.checkbox("Show last analysis details"):
-                last = subs.iloc[0]
-                st.json({"extracted_data": json.loads(last['extracted_data']), "ai_insights": json.loads(last['ai_insights'])})
-    with tabs[2]:
-        st.subheader("Profile")
-        st.write(f"Contact: {user.get('contact_person')}")
-        st.write(f"Email: {user.get('email')}")
-        if st.button("Logout"):
-            st.session_state.pop("institution_user", None)
+        st.sidebar.success(f"Logged in: {st.session_state['user']['institution_name']}")
+        if st.sidebar.button("Logout"):
+            st.session_state['user'] = None
             st.experimental_rerun()
 
-# System admin UI (read-only)
-def system_ui(analyzer: InstitutionalAIAnalyzer):
-    st.header("⚙️ System Overview")
-    st.subheader("DB Summary")
-    df = analyzer.historical_data
-    st.metric("Institutions in DB", df['institution_id'].nunique())
-    st.metric("Total records", len(df))
-    st.write("System embedding model available:", bool(analyzer.embedding_model))
-    if st.button("Force reload embedding model"):
-        # clear cache (simple trick)
-        st.cache_resource.clear()
-        st.experimental_rerun()
+    # Top tabs
+    tabs = st.tabs(["Dashboard", "Document Sufficiency", "RAG Analyzer", "Institution Portal", "Reports & Downloads", "System"])
+    # ---- Dashboard
+    with tabs[0]:
+        st.header("📊 System Dashboard")
+        # KPIs
+        cur_year = st.selectbox("Select Year", sorted(df['year'].unique(), reverse=True), index=0)
+        df_year = df[df['year']==cur_year]
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Institutions", df_year['institution_id'].nunique())
+        with col2:
+            st.metric("Avg Composite Score", f"{df_year['composite_score'].mean():.2f}/100")
+        with col3:
+            st.metric("Avg Mandatory Suff %", f"{df_year['mandatory_sufficiency_pct'].mean():.1f}%")
+        with col4:
+            st.metric("Avg Overall Doc Suff %", f"{df_year['overall_document_sufficiency_pct'].mean():.1f}%")
+        st.markdown("---")
+        # histogram of composite scores
+        fig_hist = px.histogram(df_year, x="composite_score", nbins=20, title=f"Composite Score Distribution ({cur_year})")
+        st.plotly_chart(fig_hist, use_container_width=True)
+        # scatter matrix - research vs placements
+        fig_scatter = px.scatter(df_year, x="research_publications_count", y="placements_pct", color="institution_type",
+                                 size="composite_score", hover_data=["institution_id","institution_name"], title="Publications vs Placements")
+        st.plotly_chart(fig_scatter, use_container_width=True)
+        # trend line for selected institution
+        sel_inst = st.selectbox("Select Institution to show trend", df['institution_id'].unique())
+        inst_ts = df[df['institution_id']==sel_inst].sort_values('year')
+        fig_trend = px.line(inst_ts, x='year', y='composite_score', title=f"Composite Score Trend — {sel_inst}", markers=True)
+        st.plotly_chart(fig_trend, use_container_width=True)
 
-# -----------------------------
-# Main
-# -----------------------------
-def main():
-    conn = get_db_conn()
-    analyzer = InstitutionalAIAnalyzer(conn)
-    analyzer.seed_system_users()
+    # ---- Document Sufficiency
+    with tabs[1]:
+        st.header("📂 Document Sufficiency & Checklist")
+        st.markdown("Heatmap of document sufficiency (mandatory %) per institution (averaged across years or selected year).")
+        agg_by_inst = summary.copy()
+        year_or_avg = st.radio("View", ["Average (all years)", "Specific Year"])
+        if year_or_avg == "Average (all years)":
+            heat_df = summary[['institution_id','composite_score','mandatory_sufficiency_pct']].set_index('institution_id')
+            # heatmap
+            fig = px.imshow(heat_df[['mandatory_sufficiency_pct']].T, labels=dict(x="Institution", y="Metric"), x=heat_df.index, y=["Mand. Suff. %"], aspect="auto", text_auto=True)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            sel_year = st.selectbox("Year", sorted(df['year'].unique()))
+            tmp = df[df['year']==sel_year][['institution_id','mandatory_sufficiency_pct']].set_index('institution_id')
+            fig = px.imshow(tmp.T, labels=dict(x="Institution", y="Metric"), x=tmp.index, y=["Mand. Suff. %"], aspect="auto", text_auto=True)
+            st.plotly_chart(fig, use_container_width=True)
+        st.markdown("### Document details (per institution-year)")
+        sel_inst = st.selectbox("Institution for document checklist", df['institution_id'].unique(), index=0, key="doc_inst")
+        sel_year = st.selectbox("Year", sorted(df['year'].unique(), reverse=True), index=0, key="doc_year")
+        docs_subset = df_docs[(df_docs['institution_id']==sel_inst) & (df_docs['year']==sel_year)]
+        if docs_subset.empty:
+            st.info("No document records for selection.")
+        else:
+            st.dataframe(docs_subset[['document_name','category','submitted']].sort_values(['category','document_name']), width=900)
 
-    # sidebar login / register
-    sidebar_login_ui(analyzer)
+    # ---- RAG Analyzer
+    with tabs[2]:
+        st.header("🤖 Document Analyzer (RAG-style)")
+        st.markdown("Upload files (pdf, docx, txt). If `sentence-transformers` is installed, embeddings will be used for similarity queries.")
+        rag = SimpleRAG()
+        uploaded = st.file_uploader("Upload documents for analysis", accept_multiple_files=True, type=['pdf','docx','txt','xlsx'])
+        if uploaded:
+            if st.button("Run Extraction & Build Vectors"):
+                with st.spinner("Extracting and building... (may take time if embeddings enabled)"):
+                    rag.prepare(uploaded)
+                    st.success(f"Prepared {len(rag.texts)} text chunks.")
+                    if rag.model is not None and rag.embeddings is not None:
+                        st.success("Embeddings built.")
+                    else:
+                        st.info("Embeddings not available or not built.")
+            st.markdown("### Text preview")
+            for i,f in enumerate(uploaded):
+                txt = rag.extract_text_from_file(f)
+                if len(txt) > 1000:
+                    st.write(f"**{f.name}** - preview:")
+                    st.text_area(f"preview_{i}", txt[:2000], height=150)
+                else:
+                    st.write(f"**{f.name}** - content:")
+                    st.text(txt[:2000])
+            st.markdown("### Ask a query (similarity search)")
+            q = st.text_input("Enter query to search uploaded docs")
+            topk = st.slider("Top K", 1, 10, 5)
+            if st.button("Query documents"):
+                if rag.model and rag.embeddings is not None:
+                    results = rag.query(q, topk)
+                    if results:
+                        for r in results:
+                            st.write(f"**Score:** {r['score']:.4f}")
+                            st.write(r['text'][:800])
+                            st.markdown("---")
+                    else:
+                        st.info("No matches found.")
+                else:
+                    st.info("Embeddings not available — show naive regex matches")
+                    # naive
+                    alltxt = " ".join([rag.extract_text_from_file(f) for f in uploaded])
+                    matches = re.findall(r'.{0,100}' + re.escape(q) + r'.{0,100}', alltxt, flags=re.IGNORECASE)
+                    if not matches:
+                        st.info("No text matches found.")
+                    else:
+                        for m in matches[:topk]:
+                            st.write(m)
 
-    # main dashboard and pages
-    main_dashboard(analyzer)
+    # ---- Institution Portal
+    with tabs[3]:
+        st.header("🏫 Institution Portal (upload/view)")
+        user = st.session_state.get('user')
+        if user is None:
+            st.info("Login as an Institution (sidebar) to use the portal. You can still upload files as guest to the RAG analyzer.")
+        else:
+            inst_id = user['institution_id']
+            st.subheader(f"Welcome {user['institution_name']} ({inst_id})")
+            # upload documents and store metadata in DB
+            docs = st.file_uploader("Upload documents (will save metadata)", accept_multiple_files=True, type=['pdf','docx','txt','xlsx'])
+            doc_type_input = st.text_input("Document type / tag (e.g. affidavit_legal_status, land_documents)", value="other")
+            year_input = st.number_input("Year for documents", min_value=int(df['year'].min()), max_value=int(df['year'].max()), value=int(df['year'].max()))
+            if docs and st.button("Save document metadata"):
+                conn = get_db_conn()
+                cur = conn.cursor()
+                for f in docs:
+                    cur.execute('INSERT INTO institution_documents (institution_id, year, document_name, document_type) VALUES (?,?,?,?)',
+                                (inst_id, int(year_input), f.name, doc_type_input))
+                conn.commit()
+                st.success("Document metadata saved.")
+            st.markdown("#### Previously uploaded (metadata)")
+            conn = get_db_conn()
+            cur = conn.cursor()
+            cur.execute('SELECT * FROM institution_documents WHERE institution_id = ? ORDER BY uploaded_at DESC', (inst_id,))
+            rows = cur.fetchall()
+            if rows:
+                dd = pd.DataFrame([dict(r) for r in rows])
+                st.dataframe(dd[['year','document_name','document_type','uploaded_at']])
+            else:
+                st.info("No documents uploaded (metadata).")
+
+    # ---- Reports & Downloads
+    with tabs[4]:
+        st.header("📥 Reports & Downloads")
+        st.markdown("Download CSVs, or generate per-institution HTML report.")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.download_button("Download full time-series CSV", data=open(CSV_FULL,'rb').read(), file_name="institutions_10yrs_20inst.csv", mime="text/csv")
+        with c2:
+            st.download_button("Download documents CSV", data=open(CSV_DOCS,'rb').read(), file_name="institution_documents_10yrs_20inst.csv", mime="text/csv")
+        with c3:
+            st.download_button("Download summary CSV", data=open(CSV_SUM,'rb').read(), file_name="institutions_summary.csv", mime="text/csv")
+
+        st.markdown("---")
+        st.subheader("Per-institution report (HTML)")
+        sel_inst = st.selectbox("Select institution", df['institution_id'].unique(), key="report_inst")
+        inst_df = df[df['institution_id']==sel_inst].sort_values('year', ascending=False)
+        inst_docs = df_docs[df_docs['institution_id']==sel_inst].sort_values(['year','category'])
+        if st.button("Generate HTML report"):
+            inst_info = {
+                "institution_id": sel_inst,
+                "institution_name": inst_df.iloc[0]['institution_name'],
+                "institution_type": inst_df.iloc[0]['institution_type'],
+                "heritage_category": inst_df.iloc[0]['heritage_category']
+            }
+            html = generate_html_report(inst_df, inst_docs, inst_info)
+            b = html_to_bytes_dl(f"{sel_inst}_report.html", html)
+            st.download_button("Download HTML report", data=b, file_name=f"{sel_inst}_report.html", mime="text/html")
+            st.success("Report ready for download.")
+        st.markdown("**(Optional)** If reportlab installed, generate a PDF snapshot (simple) — may be basic.")
+        if 'generate_pdf' not in st.session_state:
+            st.session_state['generate_pdf'] = False
+        if reportlab:
+            if st.button("Generate sample PDF (reportlab)"):
+                inst_info = {
+                    "institution_id": sel_inst,
+                    "institution_name": inst_df.iloc[0]['institution_name'],
+                }
+                # create in-memory PDF
+                buffer = io.BytesIO()
+                c = canvas.Canvas(buffer, pagesize=letter)
+                text = c.beginText(40, 750)
+                text.textLine(f"Report: {inst_info['institution_name']} ({inst_info['institution_id']})")
+                text.textLine(f"Generated: {datetime.now().isoformat()}")
+                text.textLine("")
+                # add last 3 years table
+                last = inst_df.head(3)
+                for _,r in last.iterrows():
+                    text.textLine(f"Year {int(r['year'])} | Composite: {r['composite_score']} | Risk: {r['risk_level']} | Approval: {r['approval_recommendation']}")
+                c.drawText(text)
+                c.showPage()
+                c.save()
+                buffer.seek(0)
+                st.download_button("Download PDF report", data=buffer, file_name=f"{sel_inst}_summary.pdf", mime="application/pdf")
+        else:
+            st.info("reportlab not installed. PDF export disabled.")
+
+    # ---- System
+    with tabs[5]:
+        st.header("⚙️ System")
+        st.write("Model availability & diagnostics")
+        st.write("SentenceTransformers available:", SentenceTransformer is not None)
+        st.write("PyPDF2 available:", PyPDF2 is not None)
+        st.write("docx available:", docx is not None)
+        st.write("Reportlab available:", 'reportlab' in globals() and reportlab is not None)
+        if st.button("Force regenerate dataset"):
+            df, df_docs, summary = generate_dummy_dataset(force=True)
+            st.success("Dataset regenerated.")
+        st.markdown("### Quick insights")
+        # top 5 by average composite score
+        top5 = summary.nlargest(5, "composite_score")
+        st.write("Top 5 institutions (avg composite score):")
+        st.table(top5[['institution_id','institution_name','composite_score','overall_document_sufficiency_pct']])
 
 if __name__ == "__main__":
     main()
