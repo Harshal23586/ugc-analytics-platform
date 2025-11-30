@@ -24,11 +24,9 @@ from pathlib import Path
 # RAG-specific imports
 import PyPDF2
 import docx
-import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# Add these instead:
 import re
 from typing import List
 
@@ -51,8 +49,6 @@ class SimpleTextSplitter:
         self.chunk_overlap = chunk_overlap
     
     def split_text(self, text: str) -> List[str]:
-        """Simple text splitter that splits by sentences and chunks"""
-        # Split by sentences (simple approach)
         sentences = re.split(r'[.!?]+', text)
         chunks = []
         current_chunk = ""
@@ -62,12 +58,9 @@ class SimpleTextSplitter:
             if not sentence:
                 continue
                 
-            # If adding this sentence would exceed chunk size, save current chunk
             if len(current_chunk) + len(sentence) > self.chunk_size and current_chunk:
                 chunks.append(current_chunk.strip())
-                # Keep overlap if specified
                 if self.chunk_overlap > 0:
-                    # Simple overlap: keep last few sentences
                     overlap_sentences = current_chunk.split('.')[-3:]
                     current_chunk = '.'.join(overlap_sentences) + '. ' + sentence
                 else:
@@ -90,26 +83,23 @@ class SimpleVectorStore:
         self.embeddings = []
     
     def from_embeddings(self, text_embeddings):
-        """Create vector store from text-embedding pairs"""
         texts, embeddings = zip(*text_embeddings)
         self.documents = list(texts)
         self.embeddings = np.array(embeddings)
         return self
     
     def similarity_search_with_score(self, query: str, k: int = 5):
-        """Simple similarity search using cosine similarity"""
         if not self.embeddings.size:
             return []
         
         query_embedding = self.embedding_model.encode([query])
         similarities = cosine_similarity(query_embedding, self.embeddings)[0]
         
-        # Get top k results
         top_indices = np.argsort(similarities)[-k:][::-1]
         results = []
         
         for idx in top_indices:
-            if similarities[idx] > 0:  # Only include positive similarities
+            if similarities[idx] > 0:
                 doc = RAGDocument(
                     page_content=self.documents[idx],
                     metadata={"similarity_score": float(similarities[idx])}
@@ -138,7 +128,6 @@ class RAGDataExtractor:
             self.documents = []
         except Exception as e:
             st.error(f"Error initializing RAG system: {e}")
-            # Fallback: create a simple dummy embedding model
             self.embedding_model = None
             self.text_splitter = SimpleTextSplitter(
                 chunk_size=1000,
@@ -148,7 +137,6 @@ class RAGDataExtractor:
             self.documents = []
 
     def build_vector_store(self, documents: List[RAGDocument]):
-        """Build simple vector store from documents"""
         if not documents or self.embedding_model is None:
             return None
         
@@ -159,7 +147,6 @@ class RAGDataExtractor:
             
             embeddings = self.embedding_model.encode(texts)
         
-            # Create text-embedding pairs for our simple vector store
             text_embeddings = list(zip(texts, embeddings))
             self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
             self.documents = documents
@@ -168,7 +155,6 @@ class RAGDataExtractor:
             return None
         
     def extract_text_from_file(self, file) -> str:
-        """Extract text from various file formats"""
         text = ""
         file_extension = file.name.split('.')[-1].lower()
         
@@ -196,15 +182,11 @@ class RAGDataExtractor:
         return text
     
     def preprocess_text(self, text: str) -> str:
-        """Clean and preprocess extracted text"""
-        # Remove extra whitespace
         text = re.sub(r'\s+', ' ', text)
-        # Remove special characters but keep relevant ones
         text = re.sub(r'[^\w\s.,!?;:()\-]', '', text)
         return text.strip()
     
     def extract_structured_data(self, text: str) -> Dict[str, Any]:
-        """Extract structured data from text using pattern matching"""
         data = {
             'academic_metrics': {},
             'research_metrics': {},
@@ -214,7 +196,6 @@ class RAGDataExtractor:
             'financial_metrics': {}
         }
         
-        # Academic metrics patterns
         academic_patterns = {
             'naac_grade': r'NAAC\s*(?:grade|accreditation|score)[:\s]*([A+]+)',
             'nirf_ranking': r'NIRF\s*(?:rank|ranking)[:\s]*(\d+)',
@@ -223,7 +204,6 @@ class RAGDataExtractor:
             'placement_rate': r'placement\s*(?:rate|percentage)[:\s]*(\d+(?:\.\d+)?)%?'
         }
         
-        # Research metrics patterns
         research_patterns = {
             'research_publications': r'research\s*(?:publications|papers)[:\s]*(\d+)',
             'research_grants': r'research\s*(?:grants|funding)[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)',
@@ -231,26 +211,21 @@ class RAGDataExtractor:
             'industry_collaborations': r'industry\s*(?:collaborations|partnerships)[:\s]*(\d+)'
         }
         
-        # Extract academic metrics
         for key, pattern in academic_patterns.items():
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 data['academic_metrics'][key] = match.group(1)
         
-        # Extract research metrics
         for key, pattern in research_patterns.items():
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 data['research_metrics'][key] = match.group(1)
         
-        # Extract numbers with context
         self.extract_contextual_data(text, data)
         
         return data
     
     def extract_contextual_data(self, text: str, data: Dict):
-        """Extract data based on contextual patterns"""
-        # Look for numbers near keywords
         patterns = [
             (r'library.*?(\d+(?:,\d+)*)\s*(?:volumes|books)', 'library_volumes'),
             (r'campus.*?(\d+(?:\.\d+)?)\s*(?:acres|hectares)', 'campus_area'),
@@ -270,7 +245,6 @@ class RAGDataExtractor:
                     data['governance_metrics'][key] = match.group(1)
     
     def query_documents(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
-        """Query documents using semantic search"""
         if not self.vector_store:
             return []
             
@@ -278,7 +252,6 @@ class RAGDataExtractor:
         return results
 
     def extract_comprehensive_data(self, uploaded_files: List) -> Dict[str, Any]:
-        """Extract comprehensive data from all uploaded files"""
         all_text = ""
         all_structured_data = {
             'academic_metrics': {},
@@ -295,22 +268,18 @@ class RAGDataExtractor:
     
         for file in uploaded_files:
             try:
-                # Extract text
                 text = self.extract_text_from_file(file)
                 cleaned_text = self.preprocess_text(text)
                 all_text += cleaned_text + "\n\n"
             
-                # Create document for vector store
                 doc = RAGDocument(
                     page_content=cleaned_text,
                     metadata={"source": file.name, "type": "institutional_data"}
                 )
                 documents.append(doc)
             
-                # Extract structured data
                 file_data = self.extract_structured_data(cleaned_text)
             
-                # Merge data from all files
                 for category in file_data:
                     if category in all_structured_data:
                         all_structured_data[category].update(file_data[category])
@@ -321,7 +290,6 @@ class RAGDataExtractor:
                 st.error(f"Error processing {file.name}: {str(e)}")
                 continue
     
-        # Build vector store for semantic search (only if embedding model is available)
         if documents and self.embedding_model is not None:
             try:
                 self.build_vector_store(documents)
@@ -334,7 +302,6 @@ class RAGDataExtractor:
         
 class InstitutionalAIAnalyzer:
     def __init__(self):
-        # Add category definitions at class level
         self.institution_categories = [
             "Multi-disciplinary Education and Research-Intensive",
             "Research-Intensive", 
@@ -360,14 +327,12 @@ class InstitutionalAIAnalyzer:
 
         
     def init_database(self):
-        """Initialize SQLite database for storing institutional data"""
         self.conn = sqlite3.connect('institutions.db', check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
 
     
     def create_dummy_system_users(self):
-        """Create dummy system users for testing"""
         system_users = [
             {
                 'username': 'ugc_officer',
@@ -405,7 +370,6 @@ class InstitutionalAIAnalyzer:
     
         for user_data in system_users:
             try:
-                # Check if user already exists
                 cursor = self.conn.cursor()
                 cursor.execute('SELECT * FROM system_users WHERE username = ?', (user_data['username'],))
                 existing_user = cursor.fetchone()
@@ -419,11 +383,9 @@ class InstitutionalAIAnalyzer:
                         user_data['role'],
                         user_data['department']
                     )
-                    print(f"Created system user: {user_data['username']}")
             except Exception as e:
                 print(f"Error creating system user {user_data['username']}: {e}")    
         
-        # Create institutions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institutions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -434,76 +396,54 @@ class InstitutionalAIAnalyzer:
                 heritage_category TEXT,
                 state TEXT,
                 established_year INTEGER,
-                
-                -- Appendix 1: Curriculum metrics
                 curriculum_innovation_score REAL,
                 student_feedback_score REAL,
                 stakeholder_involvement_score REAL,
                 lifelong_learning_initiatives INTEGER,
                 multidisciplinary_courses INTEGER,
-                
-                -- Appendix 1: Faculty Resources
                 faculty_selection_transparency REAL,
                 faculty_diversity_index REAL,
                 continuous_professional_dev REAL,
                 social_inclusivity_measures REAL,
-                
-                -- Appendix 1: Learning and Teaching
                 experiential_learning_score REAL,
                 digital_technology_adoption REAL,
                 research_oriented_teaching REAL,
                 critical_thinking_focus REAL,
-                
-                -- Appendix 1: Research and Innovation
                 interdisciplinary_research REAL,
                 industry_collaboration_score REAL,
                 patents_filed INTEGER,
                 research_publications INTEGER,
                 translational_research_score REAL,
-                
-                -- Appendix 1: Community Engagement
                 community_projects_count INTEGER,
                 social_outreach_score REAL,
                 rural_engagement_initiatives INTEGER,
-                
-                -- Appendix 1: Green Initiatives
                 renewable_energy_adoption REAL,
                 waste_management_score REAL,
                 carbon_footprint_reduction REAL,
                 sdg_alignment_score REAL,
-                
-                -- Appendix 1: Governance and Administration
                 egovernance_implementation REAL,
                 grievance_redressal_efficiency REAL,
                 internationalization_score REAL,
                 gender_parity_ratio REAL,
-                
-                -- Appendix 1: Infrastructure Development
                 digital_infrastructure_score REAL,
                 research_lab_quality REAL,
                 library_resources_score REAL,
                 sports_facilities_score REAL,
-                
-                -- Appendix 1: Financial Resources and Management
                 research_funding_utilization REAL,
                 infrastructure_investment REAL,
                 financial_sustainability REAL,
                 csr_funding_attraction REAL,
-                
-                -- Composite scores
                 input_score REAL,
                 process_score REAL,
                 outcome_score REAL,
                 impact_score REAL,
                 overall_score REAL,
-                
                 approval_recommendation TEXT,
                 risk_level TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # Create documents table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institution_documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -518,7 +458,6 @@ class InstitutionalAIAnalyzer:
             )
         ''')
         
-        # Create RAG analysis table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS rag_analysis (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -532,7 +471,6 @@ class InstitutionalAIAnalyzer:
             )
         ''')
         
-        # Create institution submissions table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institution_submissions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -548,7 +486,6 @@ class InstitutionalAIAnalyzer:
             )
         ''')
         
-        # Create institution users table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS institution_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -565,7 +502,6 @@ class InstitutionalAIAnalyzer:
             )
         ''')
         
-        # Create system users table for other roles
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -583,7 +519,6 @@ class InstitutionalAIAnalyzer:
         self.conn.commit()
 
     def create_dummy_institution_users(self):
-        """Create dummy institution users for testing"""
         dummy_users = [
             {
                 'institution_id': 'INST_0001',
@@ -600,36 +535,11 @@ class InstitutionalAIAnalyzer:
                 'contact_person': 'Ms. Priya Sharma',
                 'email': 'priya.sharma@college005.edu.in',
                 'phone': '+91-8765432109'
-            },
-            {
-                'institution_id': 'INST_0010',
-                'username': 'inst010_director',
-                'password': 'demo789',
-                'contact_person': 'Prof. Amit Patel',
-                'email': 'amit.patel@university010.edu.in',
-                'phone': '+91-7654321098'
-            },
-            {
-                'institution_id': 'INST_0015',
-                'username': 'inst015_officer',
-                'password': 'admin2024',
-                'contact_person': 'Dr. Sunita Reddy',
-                'email': 'sunita.reddy@college015.edu.in',
-                'phone': '+91-6543210987'
-            },
-            {
-                'institution_id': 'INST_0020',
-                'username': 'inst020_manager',
-                'password': 'securepass',
-                'contact_person': 'Mr. Vikram Singh',
-                'email': 'vikram.singh@university020.edu.in',
-                'phone': '+91-5432109876'
             }
         ]
     
         for user_data in dummy_users:
             try:
-                # Check if user already exists
                 cursor = self.conn.cursor()
                 cursor.execute('SELECT * FROM institution_users WHERE username = ?', (user_data['username'],))
                 existing_user = cursor.fetchone()
@@ -643,13 +553,11 @@ class InstitutionalAIAnalyzer:
                         user_data['email'],
                         user_data['phone']
                     )
-                    print(f"Created user: {user_data['username']}")
             except Exception as e:
                 print(f"Error creating user {user_data['username']}: {e}")
 
     def create_institution_user(self, institution_id: str, username: str, password: str, 
                           contact_person: str, email: str, phone: str):
-        """Create new institution user account"""
         cursor = self.conn.cursor()
         try:
             cursor.execute('''
@@ -664,16 +572,12 @@ class InstitutionalAIAnalyzer:
             return False
 
     def hash_password(self, password: str) -> str:
-        """Simple password hashing (use proper hashing in production)"""
         return hashlib.sha256(password.encode()).hexdigest()
 
     def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
-        """Analyze uploaded documents using RAG and extract structured data"""
         try:
-            # Extract data using RAG
             extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
         
-            # Ensure extracted_data has all required keys
             if not extracted_data:
                 extracted_data = {
                     'academic_metrics': {},
@@ -686,7 +590,6 @@ class InstitutionalAIAnalyzer:
                     'file_names': [f.name for f in uploaded_files]
                 }
         
-            # Save extracted data to database
             cursor = self.conn.cursor()
             cursor.execute('''
                 INSERT INTO rag_analysis 
@@ -696,7 +599,6 @@ class InstitutionalAIAnalyzer:
         
             self.conn.commit()
         
-            # Generate AI insights
             ai_insights = self.generate_ai_insights(extracted_data)
         
             return {
@@ -708,7 +610,6 @@ class InstitutionalAIAnalyzer:
         
         except Exception as e:
             st.error(f"Error in RAG analysis: {str(e)}")
-            # Return a safe default structure even on error
             return {
                 'extracted_data': {
                     'academic_metrics': {},
@@ -732,8 +633,6 @@ class InstitutionalAIAnalyzer:
             }
 
     def generate_ai_insights(self, extracted_data: Dict) -> Dict[str, Any]:
-        """Generate AI insights from extracted data"""
-        # Ensure extracted_data is not None
         if not extracted_data:
             extracted_data = {}
     
@@ -745,37 +644,28 @@ class InstitutionalAIAnalyzer:
             'compliance_status': {}
         }
     
-        # Safe access to nested dictionaries
         academic_data = extracted_data.get('academic_metrics', {})
         research_data = extracted_data.get('research_metrics', {})
         financial_data = extracted_data.get('financial_metrics', {})
         
-        # Analyze academic metrics
-        academic_data = extracted_data.get('academic_metrics', {})
-        research_data = extracted_data.get('research_metrics', {})
-        
-        # Strength analysis
         if academic_data.get('naac_grade') in ['A++', 'A+', 'A']:
             insights['strengths'].append(f"Strong NAAC accreditation: {academic_data['naac_grade']}")
         
         if research_data.get('research_publications', 0) > 50:
             insights['strengths'].append("Robust research publication output")
         
-        # Weakness analysis
         if academic_data.get('student_faculty_ratio', 0) > 25:
             insights['weaknesses'].append("High student-faculty ratio needs improvement")
         
         if research_data.get('patents_filed', 0) < 5:
             insights['weaknesses'].append("Limited patent filings - need to strengthen IPR culture")
         
-        # Recommendations
         if not academic_data.get('nirf_ranking'):
             insights['recommendations'].append("Consider participating in NIRF ranking for better visibility")
         
         if research_data.get('industry_collaborations', 0) < 3:
             insights['recommendations'].append("Increase industry collaborations for practical exposure")
         
-        # Risk assessment
         risk_score = self.calculate_risk_score(extracted_data)
         insights['risk_assessment'] = {
             'score': risk_score,
@@ -786,14 +676,12 @@ class InstitutionalAIAnalyzer:
         return insights
     
     def calculate_risk_score(self, extracted_data: Dict) -> float:
-        """Calculate risk score based on extracted data"""
-        score = 5.0  # Default medium risk
+        score = 5.0
         
         academic_data = extracted_data.get('academic_metrics', {})
         research_data = extracted_data.get('research_metrics', {})
         financial_data = extracted_data.get('financial_metrics', {})
         
-        # Positive factors (reduce risk)
         if academic_data.get('naac_grade') in ['A++', 'A+', 'A']:
             score -= 1.5
         if research_data.get('research_publications', 0) > 50:
@@ -801,7 +689,6 @@ class InstitutionalAIAnalyzer:
         if financial_data.get('financial_stability_score', 0) > 7:
             score -= 1.0
         
-        # Negative factors (increase risk)
         if academic_data.get('student_faculty_ratio', 0) > 25:
             score += 1.5
         if research_data.get('patents_filed', 0) < 2:
@@ -812,7 +699,6 @@ class InstitutionalAIAnalyzer:
         return max(1.0, min(10.0, score))
     
     def identify_risk_factors(self, extracted_data: Dict) -> List[str]:
-        """Identify specific risk factors"""
         risk_factors = []
         academic_data = extracted_data.get('academic_metrics', {})
         research_data = extracted_data.get('research_metrics', {})
@@ -827,22 +713,18 @@ class InstitutionalAIAnalyzer:
         return risk_factors
     
     def load_or_generate_data(self):
-        """Load data from database or generate sample data"""
         try:
-            # Try to load from database
             df = pd.read_sql('SELECT * FROM institutions', self.conn)
             if len(df) > 0:
                 return df
         except:
             pass
         
-        # Generate sample data if database is empty
         sample_data = self.generate_comprehensive_historical_data()
         sample_data.to_sql('institutions', self.conn, if_exists='replace', index=False)
         return sample_data
     
     def define_performance_metrics(self) -> Dict[str, Dict]:
-        """Define key performance indicators for institutional evaluation"""
         return {
             "input_parameters": {
                 "weight": 0.25,
@@ -881,7 +763,6 @@ class InstitutionalAIAnalyzer:
         }
     
     def define_document_requirements(self) -> Dict[str, Dict]:
-        """Define document requirements for different approval types"""
         return {
             "new_approval": {
                 "mandatory": [
@@ -917,19 +798,16 @@ class InstitutionalAIAnalyzer:
         }
 
     def generate_comprehensive_historical_data(self) -> pd.DataFrame:
-        """Generate comprehensive historical data for 20 institutions over 10 years based on Appendix 1"""
         np.random.seed(42)
         n_institutions = 20
-        years_of_data = 10  # 2014-2023
+        years_of_data = 10
 
         institutions_data = []
 
         for inst_id in range(1, n_institutions + 1):
-            # Assign categories PER INSTITUTION (not per year)
             institution_type = np.random.choice(self.institution_categories)
             heritage_type = np.random.choice(self.heritage_categories)
             
-            # Set base characteristics based on categories
             if institution_type == "Research-Intensive":
                 research_weight = 1.5
                 teaching_weight = 0.8
@@ -964,11 +842,9 @@ class InstitutionalAIAnalyzer:
             
             for year_offset in range(years_of_data):
                 year = 2023 - year_offset
-                # Add slight improvement trend over years
                 improvement_factor = 1.0 + (year_offset * 0.02)
 
                 institution_data = {
-                    # Basic info with categories
                     'institution_id': f'INST_{inst_id:04d}',
                     'institution_name': f'University {inst_id:03d}',
                     'year': year,
@@ -977,70 +853,59 @@ class InstitutionalAIAnalyzer:
                     'established_year': establishment_year,
                     'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh']),
                     
-                    # Appendix 1: Curriculum metrics
                     'curriculum_innovation_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'student_feedback_score': round(np.random.uniform(6, 9) * improvement_factor, 2),
                     'stakeholder_involvement_score': round(np.random.uniform(5, 8) * improvement_factor, 2),
                     'lifelong_learning_initiatives': np.random.randint(1, 10),
                     'multidisciplinary_courses': np.random.randint(5, 20),
                     
-                    # Appendix 1: Faculty Resources
                     'faculty_selection_transparency': round(np.random.uniform(6, 9) * improvement_factor, 2),
                     'faculty_diversity_index': round(np.random.uniform(5, 8) * improvement_factor, 2),
                     'continuous_professional_dev': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'social_inclusivity_measures': round(np.random.uniform(5, 8) * improvement_factor, 2),
                     
-                    # Appendix 1: Learning and Teaching
                     'experiential_learning_score': round(np.random.uniform(5, 9) * teaching_weight * improvement_factor, 2),
                     'digital_technology_adoption': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'research_oriented_teaching': round(np.random.uniform(5, 8) * research_weight * improvement_factor, 2),
                     'critical_thinking_focus': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     
-                    # Appendix 1: Research and Innovation
                     'interdisciplinary_research': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'industry_collaboration_score': round(np.random.uniform(4, 8) * improvement_factor, 2),
                     'patents_filed': int(np.random.poisson(3 * research_weight)),
                     'research_publications': int(np.random.poisson(15 * research_weight)),
                     'translational_research_score': round(np.random.uniform(3, 8) * research_weight * improvement_factor, 2),
                     
-                    # Appendix 1: Community Engagement
                     'community_projects_count': int(np.random.poisson(8 * community_weight)),
                     'social_outreach_score': round(np.random.uniform(4, 9) * community_weight * improvement_factor, 2),
                     'rural_engagement_initiatives': np.random.randint(1, 12),
                     
-                    # Appendix 1: Green Initiatives
                     'renewable_energy_adoption': round(np.random.uniform(3, 9) * improvement_factor, 2),
                     'waste_management_score': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'carbon_footprint_reduction': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'sdg_alignment_score': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     
-                    # Appendix 1: Governance and Administration
                     'egovernance_implementation': round(np.random.uniform(4, 9) * improvement_factor, 2),
                     'grievance_redressal_efficiency': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'internationalization_score': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'gender_parity_ratio': round(np.random.uniform(0.3, 0.8), 2),
                     
-                    # Appendix 1: Infrastructure Development
                     'digital_infrastructure_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'research_lab_quality': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'library_resources_score': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'sports_facilities_score': round(np.random.uniform(4, 8) * improvement_factor, 2),
                     
-                    # Appendix 1: Financial Resources and Management
                     'research_funding_utilization': round(np.random.uniform(4, 9) * research_weight * improvement_factor, 2),
                     'infrastructure_investment': round(np.random.uniform(3, 8) * improvement_factor, 2),
                     'financial_sustainability': round(np.random.uniform(5, 9) * improvement_factor, 2),
                     'csr_funding_attraction': round(np.random.uniform(2, 8) * improvement_factor, 2),
                 }
                 
-                # Calculate composite scores based on Appendix 1 framework
                 institution_data['input_score'] = self.calculate_input_score(institution_data)
                 institution_data['process_score'] = self.calculate_process_score(institution_data)
                 institution_data['outcome_score'] = self.calculate_outcome_score(institution_data)
                 institution_data['impact_score'] = self.calculate_impact_score(institution_data)
                 institution_data['overall_score'] = self.calculate_overall_score(institution_data)
                 
-                # Generate approval recommendation and risk level
                 institution_data['approval_recommendation'] = self.generate_approval_recommendation(institution_data['overall_score'])
                 institution_data['risk_level'] = self.assess_risk_level(institution_data['overall_score'])
                 
@@ -1049,7 +914,6 @@ class InstitutionalAIAnalyzer:
         return pd.DataFrame(institutions_data)
 
     def calculate_input_score(self, data):
-        """Calculate input score based on Appendix 1 framework"""
         weights = {
             'faculty_resources': 0.25,
             'infrastructure': 0.25,
@@ -1066,7 +930,6 @@ class InstitutionalAIAnalyzer:
         return round(score, 2)
 
     def calculate_process_score(self, data):
-        """Calculate process score based on Appendix 1 framework"""
         weights = {
             'teaching_processes': 0.3,
             'research_processes': 0.3,
@@ -1083,7 +946,6 @@ class InstitutionalAIAnalyzer:
         return round(score, 2)
 
     def calculate_outcome_score(self, data):
-        """Calculate outcome score based on Appendix 1 framework"""
         weights = {
             'learning_outcomes': 0.4,
             'research_outcomes': 0.3,
@@ -1098,7 +960,6 @@ class InstitutionalAIAnalyzer:
         return round(score, 2)
 
     def calculate_impact_score(self, data):
-        """Calculate impact score based on Appendix 1 framework"""
         weights = {
             'societal_impact': 0.4,
             'environmental_impact': 0.3,
@@ -1113,7 +974,6 @@ class InstitutionalAIAnalyzer:
         return round(score, 2)
 
     def calculate_overall_score(self, data):
-        """Calculate overall performance score"""
         weights = {
             'input': 0.25,
             'process': 0.25,
@@ -1130,7 +990,6 @@ class InstitutionalAIAnalyzer:
         return round(score, 2)
 
     def generate_approval_recommendation(self, performance_score: float) -> str:
-        """Generate approval recommendation based on performance score"""
         if performance_score >= 8.0:
             return "Full Approval - 5 Years"
         elif performance_score >= 7.0:
@@ -1143,7 +1002,6 @@ class InstitutionalAIAnalyzer:
             return "Rejection - Significant Improvements Required"
 
     def assess_risk_level(self, performance_score: float) -> str:
-        """Assess institutional risk level"""
         if performance_score >= 8.0:
             return "Low Risk"
         elif performance_score >= 6.5:
@@ -1154,7 +1012,6 @@ class InstitutionalAIAnalyzer:
             return "Critical Risk"
 
     def authenticate_institution_user(self, username: str, password: str) -> Dict:
-        """Authenticate institution user"""
         if not username or not password:
             return None
         
@@ -1168,11 +1025,9 @@ class InstitutionalAIAnalyzer:
     
         user = cursor.fetchone()
         if user:
-            # Convert to dictionary safely
             columns = [description[0] for description in cursor.description]
             user_dict = dict(zip(columns, user))
         
-            # Check if password_hash exists and matches
             password_hash = user_dict.get('password_hash')
             if password_hash and password_hash == self.hash_password(password):
                 return {
@@ -1186,7 +1041,6 @@ class InstitutionalAIAnalyzer:
         return None
 
     def authenticate_system_user(self, username: str, password: str, role: str) -> Dict:
-        """Authenticate system user (UGC Officer, AICTE Officer, System Admin, Review Committee)"""
         if not username or not password:
             return None
         
@@ -1198,11 +1052,9 @@ class InstitutionalAIAnalyzer:
     
         user = cursor.fetchone()
         if user:
-            # Convert to dictionary safely
             columns = [description[0] for description in cursor.description]
             user_dict = dict(zip(columns, user))
         
-            # Check if password_hash exists and matches
             password_hash = user_dict.get('password_hash')
             if password_hash and password_hash == self.hash_password(password):
                 return {
@@ -1216,7 +1068,6 @@ class InstitutionalAIAnalyzer:
 
     def create_system_user(self, username: str, password: str, full_name: str, 
                           email: str, role: str, department: str):
-        """Create new system user account"""
         cursor = self.conn.cursor()
         try:
             cursor.execute('''
@@ -1231,7 +1082,6 @@ class InstitutionalAIAnalyzer:
 
     def save_institution_submission(self, institution_id: str, submission_type: str, 
                                   submission_data: Dict):
-        """Save institution submission data"""
         cursor = self.conn.cursor()
         cursor.execute('''
             INSERT INTO institution_submissions 
@@ -1241,7 +1091,6 @@ class InstitutionalAIAnalyzer:
         self.conn.commit()
 
     def get_institution_submissions(self, institution_id: str) -> pd.DataFrame:
-        """Get submissions for a specific institution"""
         return pd.read_sql('''
             SELECT * FROM institution_submissions 
             WHERE institution_id = ? 
@@ -1249,7 +1098,6 @@ class InstitutionalAIAnalyzer:
         ''', self.conn, params=(institution_id,))
 
     def save_uploaded_documents(self, institution_id: str, uploaded_files: List, document_types: List[str]):
-        """Save uploaded documents to database"""
         cursor = self.conn.cursor()
         for i, uploaded_file in enumerate(uploaded_files):
             cursor.execute('''
@@ -1259,7 +1107,6 @@ class InstitutionalAIAnalyzer:
         self.conn.commit()
     
     def get_institution_documents(self, institution_id: str) -> pd.DataFrame:
-        """Get documents for a specific institution"""
         return pd.read_sql('''
             SELECT * FROM institution_documents 
             WHERE institution_id = ? 
@@ -1267,10 +1114,8 @@ class InstitutionalAIAnalyzer:
         ''', self.conn, params=(institution_id,))
     
     def analyze_document_sufficiency(self, uploaded_docs: List[str], approval_type: str) -> Dict:
-        """Analyze document sufficiency percentage"""
         requirements = self.document_requirements[approval_type]
         
-        # Count present documents
         mandatory_present = 0
         for doc in requirements['mandatory']:
             for uploaded_doc in uploaded_docs:
@@ -1303,7 +1148,6 @@ class InstitutionalAIAnalyzer:
         }
     
     def generate_document_recommendations(self, mandatory_sufficiency: float) -> List[str]:
-        """Generate recommendations based on document sufficiency"""
         recommendations = []
         
         if mandatory_sufficiency < 100:
@@ -1318,7 +1162,6 @@ class InstitutionalAIAnalyzer:
         return recommendations
     
     def generate_comprehensive_report(self, institution_id: str) -> Dict[str, Any]:
-        """Generate comprehensive AI analysis report for an institution"""
         inst_data = self.historical_data[
             self.historical_data['institution_id'] == institution_id
         ]
@@ -1329,7 +1172,6 @@ class InstitutionalAIAnalyzer:
         latest_data = inst_data[inst_data['year'] == inst_data['year'].max()].iloc[0]
         historical_trend = inst_data.groupby('year')['overall_score'].mean()
         
-        # Performance trends
         if len(historical_trend) > 1:
             if historical_trend.iloc[-1] > historical_trend.iloc[-2]:
                 trend_analysis = "Improving"
@@ -1340,7 +1182,6 @@ class InstitutionalAIAnalyzer:
         else:
             trend_analysis = "Insufficient Data"
         
-        # Comparative analysis
         similar_institutions = self.find_similar_institutions(institution_id)
         
         return {
@@ -1369,7 +1210,6 @@ class InstitutionalAIAnalyzer:
         }
     
     def find_similar_institutions(self, institution_id: str) -> Dict:
-        """Find similar institutions for comparative analysis"""
         inst_data = self.historical_data[
             self.historical_data['institution_id'] == institution_id
         ]
@@ -1379,7 +1219,6 @@ class InstitutionalAIAnalyzer:
         
         latest_data = inst_data[inst_data['year'] == inst_data['year'].max()].iloc[0]
         
-        # Find similar institutions based on type and performance
         similar_inst = self.historical_data[
             (self.historical_data['institution_type'] == latest_data['institution_type']) &
             (self.historical_data['year'] == latest_data['year']) &
@@ -1398,7 +1237,6 @@ class InstitutionalAIAnalyzer:
         }
     
     def calculate_performance_percentile(self, score: float, inst_type: str) -> float:
-        """Calculate performance percentile within institution type"""
         type_data = self.historical_data[
             (self.historical_data['institution_type'] == inst_type) &
             (self.historical_data['year'] == 2023)
@@ -1410,7 +1248,6 @@ class InstitutionalAIAnalyzer:
         return (type_data['overall_score'] < score).mean() * 100
     
     def identify_strengths(self, institution_data: pd.Series) -> List[str]:
-        """Identify institutional strengths"""
         strengths = []
         
         if institution_data['overall_score'] >= 8.0:
@@ -1434,7 +1271,6 @@ class InstitutionalAIAnalyzer:
         return strengths
     
     def identify_weaknesses(self, institution_data: pd.Series) -> List[str]:
-        """Identify institutional weaknesses"""
         weaknesses = []
         
         if institution_data['overall_score'] < 6.0:
@@ -1455,7 +1291,6 @@ class InstitutionalAIAnalyzer:
         return weaknesses
     
     def generate_ai_recommendations(self, institution_data: pd.Series) -> List[str]:
-        """Generate AI-powered improvement recommendations"""
         recommendations = []
         
         if institution_data['research_publications'] < 10:
@@ -1499,7 +1334,6 @@ def create_institution_login(analyzer):
     with col2:
         st.subheader("New Institution Registration")
         
-        # Get available institutions
         available_institutions = analyzer.historical_data[
             analyzer.historical_data['year'] == 2023
         ][['institution_id', 'institution_name']].drop_duplicates()
@@ -1564,7 +1398,6 @@ def create_institution_dashboard(analyzer, user):
         
     st.header(f"🏛️ Institution Dashboard - {user.get('institution_name', 'Unknown')}")
     
-    # Display institution overview with safe access
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -1576,7 +1409,6 @@ def create_institution_dashboard(analyzer, user):
     with col4:
         st.metric("Role", user.get('role', 'N/A'))
     
-    # Navigation for institution users
     institution_tabs = st.tabs([
         "📤 Document Upload", 
         "📝 Data Submission", 
@@ -1616,7 +1448,6 @@ def create_institution_document_upload(analyzer, user):
     )
     
     if uploaded_files:
-        # Document type mapping
         st.subheader("📝 Document Type Assignment")
         document_types = []
         for i, file in enumerate(uploaded_files):
@@ -1631,15 +1462,12 @@ def create_institution_document_upload(analyzer, user):
             document_types.append(doc_type)
         
         if st.button("💾 Upload Documents"):
-            # Save documents
             analyzer.save_uploaded_documents(user['institution_id'], uploaded_files, document_types)
             st.success("✅ Documents uploaded successfully!")
             
-            # Analyze document sufficiency
             file_names = [file.name for file in uploaded_files]
             analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
             
-            # Display results
             st.subheader("📊 Upload Analysis")
             
             col1, col2 = st.columns(2)
@@ -1658,13 +1486,11 @@ def create_institution_document_upload(analyzer, user):
                     f"{analysis_result['overall_sufficiency']:.1f}%"
                 )
             
-            # Show missing documents
             if analysis_result['missing_mandatory']:
                 st.error("**❌ Missing Mandatory Documents:**")
                 for doc in analysis_result['missing_mandatory']:
                     st.write(f"• {doc.replace('_', ' ').title()}")
             
-            # Recommendations
             st.info("**💡 Next Steps:**")
             for recommendation in analysis_result['recommendations']:
                 st.write(f"• {recommendation}")
@@ -1838,7 +1664,6 @@ def create_institution_submissions_view(analyzer, user):
                 if submission['review_comments']:
                     st.info(f"**Review Comments:** {submission['review_comments']}")
                 
-                # Display submission data
                 try:
                     submission_data = json.loads(submission['submission_data'])
                     st.json(submission_data)
@@ -1862,19 +1687,17 @@ def create_institution_requirements_guide(analyzer):
             for doc in docs['supporting']:
                 st.write(f"• {doc.replace('_', ' ').title()}")
 
-# Existing analytical modules
+# Performance Dashboard
 def create_performance_dashboard(analyzer):
     st.header("📊 Institutional Performance Analytics Dashboard")
     
     df = analyzer.historical_data
     current_year_data = df[df['year'] == 2023]
     
-    # Ensure we have data
     if len(current_year_data) == 0:
-        st.warning("No data available for the current year. Please check data generation.")
+        st.warning("No data available for the current year.")
         return
     
-    # Key Performance Indicators
     st.subheader("🏆 Key Performance Indicators")
     
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -1900,13 +1723,11 @@ def create_performance_dashboard(analyzer):
         avg_community = current_year_data['community_projects_count'].mean()
         st.metric("Avg Community Projects", f"{avg_community:.1f}")
     
-    # Performance Analysis
     st.subheader("📈 Performance Analysis")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Performance Distribution
         if not current_year_data['overall_score'].empty:
             fig1 = px.histogram(
                 current_year_data, 
@@ -1922,11 +1743,8 @@ def create_performance_dashboard(analyzer):
                 showlegend=False
             )
             st.plotly_chart(fig1, use_container_width=True)
-        else:
-            st.info("No performance score data available for histogram")
     
     with col2:
-        # Performance by Institution Type
         if not current_year_data.empty and 'institution_type' in current_year_data.columns:
             filtered_data = current_year_data.dropna(subset=['institution_type', 'overall_score'])
             if not filtered_data.empty:
@@ -1943,12 +1761,7 @@ def create_performance_dashboard(analyzer):
                     showlegend=False
                 )
                 st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("No data available for performance by institution type")
-        else:
-            st.info("Institution type data not available")
     
-    # Trend Analysis
     st.subheader("📅 Historical Performance Trends")
     
     trend_data = df.groupby(['year', 'institution_type'])['overall_score'].mean().reset_index()
@@ -1968,16 +1781,12 @@ def create_performance_dashboard(analyzer):
             legend_title="Institution Type"
         )
         st.plotly_chart(fig3, use_container_width=True)
-    else:
-        st.info("Insufficient data for trend analysis")
     
-    # Risk Analysis
     st.subheader("⚠️ Institutional Risk Analysis")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Risk Distribution Pie Chart
         risk_distribution = current_year_data['risk_level'].value_counts()
         if not risk_distribution.empty:
             fig4 = px.pie(
@@ -1993,11 +1802,8 @@ def create_performance_dashboard(analyzer):
                 }
             )
             st.plotly_chart(fig4, use_container_width=True)
-        else:
-            st.info("No risk level data available")
     
     with col2:
-        # Research vs Community Engagement Analysis
         scatter_data = current_year_data.dropna(subset=['research_publications', 'community_projects_count', 'risk_level'])
         if not scatter_data.empty:
             fig5 = px.scatter(
@@ -2020,54 +1826,8 @@ def create_performance_dashboard(analyzer):
                 yaxis_title="Community Projects Count"
             )
             st.plotly_chart(fig5, use_container_width=True)
-        else:
-            st.info("No data available for research vs community analysis")
-    
-    # Additional Visualizations
-    st.subheader("🎯 Additional Insights")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Input-Process-Outcome-Impact Scores
-        scores_data = current_year_data[['input_score', 'process_score', 'outcome_score', 'impact_score']].mean()
-        if not scores_data.empty:
-            fig6 = px.bar(
-                x=scores_data.index,
-                y=scores_data.values,
-                title="Average Scores by Dimension",
-                color=scores_data.values,
-                color_continuous_scale='Viridis'
-            )
-            fig6.update_layout(
-                xaxis_title="Dimension",
-                yaxis_title="Average Score",
-                showlegend=False
-            )
-            st.plotly_chart(fig6, use_container_width=True)
-        else:
-            st.info("No dimension score data available")
-    
-    with col2:
-        # Institution Type Distribution
-        type_dist = current_year_data['institution_type'].value_counts()
-        if not type_dist.empty:
-            fig7 = px.bar(
-                x=type_dist.index,
-                y=type_dist.values,
-                title="Institution Type Distribution",
-                color=type_dist.index,
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            fig7.update_layout(
-                xaxis_title="Institution Type",
-                yaxis_title="Number of Institutions",
-                showlegend=False
-            )
-            st.plotly_chart(fig7, use_container_width=True)
-        else:
-            st.info("No institution type data available")
 
+# Document Analysis Module
 def create_document_analysis_module(analyzer):
     st.header("📋 AI-Powered Document Sufficiency Analysis")
     
@@ -2078,7 +1838,6 @@ def create_document_analysis_module(analyzer):
     with col1:
         st.subheader("Document Upload & Analysis")
         
-        # Institution selection
         current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
         selected_institution = st.selectbox(
             "Select Institution",
@@ -2099,7 +1858,6 @@ def create_document_analysis_module(analyzer):
         )
         
         if uploaded_files:
-            # Document type mapping
             st.subheader("📝 Document Type Assignment")
             document_types = []
             for i, file in enumerate(uploaded_files):
@@ -2114,15 +1872,12 @@ def create_document_analysis_module(analyzer):
                 document_types.append(doc_type)
             
             if st.button("💾 Save Documents & Analyze"):
-                # Save documents
                 analyzer.save_uploaded_documents(selected_institution, uploaded_files, document_types)
                 st.success("✅ Documents saved successfully!")
                 
-                # Analyze document sufficiency
                 file_names = [file.name for file in uploaded_files]
                 analysis_result = analyzer.analyze_document_sufficiency(file_names, approval_type)
                 
-                # Display results
                 st.subheader("📊 Document Sufficiency Analysis")
                 
                 col1, col2 = st.columns(2)
@@ -2141,7 +1896,6 @@ def create_document_analysis_module(analyzer):
                         f"{analysis_result['overall_sufficiency']:.1f}%"
                     )
                 
-                # Visual representation
                 fig = go.Figure()
                 fig.add_trace(go.Indicator(
                     mode = "gauge+number+delta",
@@ -2166,7 +1920,6 @@ def create_document_analysis_module(analyzer):
                 fig.update_layout(height=300)
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Missing documents
                 if analysis_result['missing_mandatory']:
                     st.error("**❌ Missing Mandatory Documents:**")
                     for doc in analysis_result['missing_mandatory']:
@@ -2177,7 +1930,6 @@ def create_document_analysis_module(analyzer):
                     for doc in analysis_result['missing_supporting']:
                         st.write(f"• {doc.replace('_', ' ').title()}")
                 
-                # Recommendations
                 st.info("**💡 AI Recommendations:**")
                 for recommendation in analysis_result['recommendations']:
                     st.write(f"• {recommendation}")
@@ -2197,7 +1949,6 @@ def create_document_analysis_module(analyzer):
                 for doc in docs['supporting']:
                     st.write(f"• {doc.replace('_', ' ').title()}")
         
-        # Show uploaded documents for selected institution
         if selected_institution:
             st.subheader("📁 Previously Uploaded Documents")
             existing_docs = analyzer.get_institution_documents(selected_institution)
@@ -2206,6 +1957,7 @@ def create_document_analysis_module(analyzer):
             else:
                 st.info("No documents uploaded yet for this institution.")
 
+# AI Analysis Reports
 def create_ai_analysis_reports(analyzer):
     st.header("🤖 Comprehensive AI Analysis Reports")
     
@@ -2221,13 +1973,11 @@ def create_ai_analysis_reports(analyzer):
         )
         
         if selected_institution:
-            # Generate comprehensive report
             report = analyzer.generate_comprehensive_report(selected_institution)
             
             if "error" not in report:
                 st.subheader(f"🏛️ AI Analysis Report: {report['institution_info']['name']}")
                 
-                # Institution Overview
                 st.info("**Institution Overview**")
                 col1, col2, col3, col4 = st.columns(4)
                 
@@ -2240,7 +1990,6 @@ def create_ai_analysis_reports(analyzer):
                 with col4:
                     st.metric("Established", report['institution_info']['established'])
                 
-                # Performance Scores
                 st.subheader("📊 Performance Scores")
                 col1, col2, col3, col4, col5 = st.columns(5)
                 
@@ -2255,7 +2004,6 @@ def create_ai_analysis_reports(analyzer):
                 with col5:
                     st.metric("Impact", f"{report['performance_analysis']['impact_score']:.2f}/10")
                 
-                # Approval Recommendation with colored indicator
                 recommendation = report['performance_analysis']['approval_recommendation']
                 if "Full Approval" in recommendation:
                     st.success(f"**✅ {recommendation}**")
@@ -2266,7 +2014,6 @@ def create_ai_analysis_reports(analyzer):
                 else:
                     st.error(f"**🔴 {recommendation}**")
                 
-                # Risk Level
                 risk_level = report['performance_analysis']['risk_level']
                 if risk_level == "Low Risk":
                     st.success(f"**Risk Level: {risk_level}**")
@@ -2275,7 +2022,6 @@ def create_ai_analysis_reports(analyzer):
                 else:
                     st.error(f"**Risk Level: {risk_level}**")
                 
-                # Performance Trend
                 st.metric(
                     "Performance Trend", 
                     report['performance_analysis']['trend_analysis'],
@@ -2283,7 +2029,6 @@ def create_ai_analysis_reports(analyzer):
                     delta_color="normal" if report['performance_analysis']['trend_analysis'] == "Improving" else "off" if report['performance_analysis']['trend_analysis'] == "Stable" else "inverse"
                 )
                 
-                # Strengths and Weaknesses
                 col1, col2 = st.columns(2)
                 
                 with col1:
@@ -2302,7 +2047,6 @@ def create_ai_analysis_reports(analyzer):
                     else:
                         st.success("No major weaknesses identified")
                 
-                # AI Recommendations
                 if report['ai_recommendations']:
                     st.warning("**🎯 AI Improvement Recommendations**")
                     for recommendation in report['ai_recommendations']:
@@ -2310,7 +2054,6 @@ def create_ai_analysis_reports(analyzer):
                 else:
                     st.success("Institution is performing well across all parameters")
                 
-                # Comparative Analysis
                 st.info("**📊 Comparative Analysis**")
                 if report['comparative_analysis']:
                     st.write(f"**Performance Percentile:** {report['comparative_analysis']['performance_percentile']:.1f}%")
@@ -2321,7 +2064,6 @@ def create_ai_analysis_reports(analyzer):
                     else:
                         st.info("No similar institutions found for comparison")
                 
-                # Historical Performance Chart
                 if len(report['performance_analysis']['historical_trend']) > 1:
                     st.subheader("📈 Historical Performance Trend")
                     trend_df = pd.DataFrame(list(report['performance_analysis']['historical_trend'].items()), 
@@ -2334,7 +2076,6 @@ def create_ai_analysis_reports(analyzer):
     with col2:
         st.subheader("Quick Institutional Insights")
         
-        # Top performers
         top_performers = df[df['year'] == 2023].nlargest(5, 'overall_score')[
             ['institution_name', 'overall_score', 'approval_recommendation']
         ]
@@ -2346,7 +2087,6 @@ def create_ai_analysis_reports(analyzer):
         
         st.markdown("---")
         
-        # High risk institutions
         high_risk = df[
             (df['year'] == 2023) & 
             (df['risk_level'].isin(['High Risk', 'Critical Risk']))
@@ -2357,7 +2097,6 @@ def create_ai_analysis_reports(analyzer):
             for _, inst in high_risk.iterrows():
                 st.write(f"• **{inst['institution_name']}** - {inst['risk_level']}")
         
-        # Quick stats
         st.markdown("---")
         st.write("**📊 Quick Statistics**")
         total_inst = len(df[df['year'] == 2023])
@@ -2366,6 +2105,7 @@ def create_ai_analysis_reports(analyzer):
         st.write(f"• High Performing: {approved}")
         st.write(f"• Approval Rate: {(approved/total_inst*100):.1f}%")
 
+# Data Management Module
 def create_data_management_module(analyzer):
     st.header("💾 Data Management & Upload")
     
@@ -2381,11 +2121,9 @@ def create_data_management_module(analyzer):
                 new_data = pd.read_csv(uploaded_file)
                 st.success(f"✅ Successfully loaded {len(new_data)} records")
                 
-                # Show preview
                 st.subheader("Data Preview")
                 st.dataframe(new_data.head())
                 
-                # Data validation
                 required_columns = ['institution_id', 'institution_name', 'year', 'institution_type']
                 missing_columns = [col for col in required_columns if col not in new_data.columns]
                 
@@ -2398,7 +2136,6 @@ def create_data_management_module(analyzer):
                         try:
                             new_data.to_sql('institutions', analyzer.conn, if_exists='append', index=False)
                             st.success("✅ Data successfully saved to database!")
-                            # Refresh the data
                             analyzer.historical_data = analyzer.load_or_generate_data()
                         except Exception as e:
                             st.error(f"❌ Error saving to database: {str(e)}")
@@ -2409,7 +2146,6 @@ def create_data_management_module(analyzer):
     with tab2:
         st.subheader("Current Database Contents")
         
-        # Show database statistics
         col1, col2, col3 = st.columns(3)
         with col1:
             total_records = len(analyzer.historical_data)
@@ -2421,11 +2157,9 @@ def create_data_management_module(analyzer):
             years_covered = analyzer.historical_data['year'].nunique()
             st.metric("Years Covered", years_covered)
         
-        # Data preview
         st.subheader("Data Preview")
         st.dataframe(analyzer.historical_data.head(10))
         
-        # Export data
         if st.button("📥 Export Current Data as CSV"):
             csv = analyzer.historical_data.to_csv(index=False)
             st.download_button(
@@ -2455,12 +2189,12 @@ def create_data_management_module(analyzer):
                 analyzer.historical_data = pd.DataFrame()
                 st.success("✅ All data cleared successfully!")
 
+# Approval Workflow
 def create_approval_workflow(analyzer):
     st.header("🔄 AI-Enhanced Approval Workflow")
     
     st.info("Streamlined approval process with AI-powered decision support")
     
-    # Workflow steps with AI integration
     workflow_steps = [
         {
             "step": 1,
@@ -2510,6 +2244,7 @@ def create_approval_workflow(analyzer):
                 for feature in step['ai_features']:
                     st.write(f"• {feature}")
 
+# RAG Data Management
 def create_rag_data_management(analyzer):
     st.header("🤖 RAG-Powered Data Management & Analysis")
     
@@ -2529,7 +2264,6 @@ def create_rag_data_management(analyzer):
     with tab1:
         st.subheader("Document Upload & Data Extraction")
         
-        # Institution selection
         current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
         selected_institution = st.selectbox(
             "Select Institution",
@@ -2547,28 +2281,23 @@ def create_rag_data_management(analyzer):
         if uploaded_files:
             st.success(f"📄 {len(uploaded_files)} documents ready for analysis")
             
-            # Show document preview
             with st.expander("📋 Document Preview"):
                 for i, file in enumerate(uploaded_files):
                     st.write(f"**{i+1}. {file.name}** ({file.size} bytes)")
             
             if st.button("🚀 Start RAG Analysis", type="primary"):
                 with st.spinner("🤖 AI is analyzing documents and extracting data..."):
-                    # Perform RAG analysis
                     analysis_result = analyzer.analyze_documents_with_rag(
                         selected_institution, 
                         uploaded_files
                     )
                     
-                    # SAFE ACCESS: Check if analysis_result is valid
                     if analysis_result and analysis_result.get('status') == 'Analysis Complete':
                         st.success("✅ RAG Analysis Completed Successfully!")
                         
-                        # Store results in session state for other tabs
                         st.session_state.rag_analysis = analysis_result
                         st.session_state.selected_institution = selected_institution
                         
-                        # Show quick insights with safe access
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             confidence = analysis_result.get('confidence_score', 0.0)
@@ -2585,14 +2314,12 @@ def create_rag_data_management(analyzer):
                     
                     else:
                         st.error("❌ RAG Analysis Failed. Please try again.")
-                        # Still store the result even if failed for debugging
                         if analysis_result:
                             st.session_state.rag_analysis = analysis_result
     
     with tab2:
         st.subheader("Extracted Data View")
         
-        # SAFE ACCESS: Check if rag_analysis exists and has extracted_data
         if 'rag_analysis' in st.session_state and st.session_state.rag_analysis:
             analysis_result = st.session_state.rag_analysis
             extracted_data = analysis_result.get('extracted_data', {})
@@ -2601,7 +2328,6 @@ def create_rag_data_management(analyzer):
                 st.warning("No extracted data available. Please run RAG analysis first.")
                 return
             
-            # Show extracted data by category
             categories = [
                 ('Academic Metrics', 'academic_metrics'),
                 ('Research Metrics', 'research_metrics'), 
@@ -2623,7 +2349,6 @@ def create_rag_data_management(analyzer):
                     else:
                         st.info(f"No {category_name.lower()} extracted from documents")
             
-            # Show raw text preview
             with st.expander("📝 Extracted Text Preview"):
                 raw_text = extracted_data.get('raw_text', '')
                 if raw_text:
@@ -2638,7 +2363,6 @@ def create_rag_data_management(analyzer):
     with tab3:
         st.subheader("AI Insights & Analysis")
         
-        # SAFE ACCESS: Check if rag_analysis exists and has ai_insights
         if 'rag_analysis' in st.session_state and st.session_state.rag_analysis:
             analysis_result = st.session_state.rag_analysis
             insights = analysis_result.get('ai_insights', {})
@@ -2689,7 +2413,6 @@ def create_rag_data_management(analyzer):
                     for factor in risk_factors:
                         st.write(f"• {factor}")
             
-            # Generate approval recommendation
             st.subheader("🏛️ Approval Recommendation")
             risk_level = risk_assessment.get('level', 'Medium')
             if risk_level == 'Low':
@@ -2722,6 +2445,7 @@ def create_rag_data_management(analyzer):
         if st.button("Apply Settings"):
             st.success("RAG settings updated successfully!")
 
+# System Settings
 def create_system_settings(analyzer):
     st.header("⚙️ System Settings & Configuration")
     st.info("System administration and configuration panel")
@@ -2746,7 +2470,6 @@ def create_system_settings(analyzer):
         st.metric("Data Years", f"{analyzer.historical_data['year'].min()}-{analyzer.historical_data['year'].max()}")
 
 def get_available_modules(user_role):
-    """Return available modules based on user role"""
     if user_role == "Institution":
         return ["🏛️ Institution Portal"]
     elif user_role == "System Admin":
@@ -2759,7 +2482,6 @@ def get_available_modules(user_role):
         return []
 
 def main():     
-    # Safe session state initialization
     if 'institution_user' not in st.session_state:
         st.session_state.institution_user = None
     if 'user_role' not in st.session_state:
@@ -2767,14 +2489,12 @@ def main():
     if 'system_user' not in st.session_state:
         st.session_state.system_user = None
     
-    # Initialize analytics engine with error handling
     try:
         analyzer = InstitutionalAIAnalyzer()
     except Exception as e:
         st.error(f"❌ System initialization error: {str(e)}")
         st.stop()
     
-    # Check if user is logged in
     if st.session_state.institution_user is not None:
         create_institution_dashboard(analyzer, st.session_state.institution_user)
         if st.sidebar.button("🚪 Logout"):
@@ -2793,7 +2513,6 @@ def main():
         if available_modules:
             selected_module = st.sidebar.selectbox("Select Module", available_modules)
             
-            # Route to selected module based on role
             if selected_module == "📊 Performance Dashboard" and user_role == "System Admin":
                 create_performance_dashboard(analyzer)
             elif selected_module == "⚙️ System Settings" and user_role == "System Admin":
@@ -2815,11 +2534,9 @@ def main():
             st.rerun()
         return
     
-    # Main authentication page
     st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
-    # Authentication tabs
     auth_tabs = st.tabs(["🏛️ Institution Login", "🔐 System Login"])
     
     with auth_tabs[0]:
@@ -2828,7 +2545,6 @@ def main():
     with auth_tabs[1]:
         create_system_login(analyzer)
     
-    # System overview
     st.markdown("---")
     col1, col2 = st.columns([2, 1])
     
@@ -2851,7 +2567,6 @@ def main():
     
     st.success("✅ AI Analytics System Successfully Initialized!")
     
-    # Display quick stats
     st.subheader("📈 System Quick Stats")
     col1, col2, col3, col4 = st.columns(4)
     
@@ -2878,7 +2593,6 @@ def main():
         else:
             st.metric("Approval Ready", "N/A")
     
-    # Footer
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #6c757d;'>
