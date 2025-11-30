@@ -3032,43 +3032,165 @@ def create_document_analysis_module(analyzer):
     
     st.info("Analyze document completeness and generate sufficiency reports for approval processes")
     
-    col1, col2 = st.columns([2, 1])
+    # Institution selection
+    current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
+    selected_institution = st.selectbox(
+        "Select Institution",
+        current_institutions,
+        key="doc_analysis_institution"
+    )
+    
+    approval_type = st.selectbox(
+        "Select Approval Type",
+        ["new_approval", "renewal_approval", "expansion_approval"],
+        format_func=lambda x: x.replace('_', ' ').title(),
+        key="doc_analysis_approval_type"
+    )
+    
+    # Get institution name for display
+    institution_name = "Unknown Institution"
+    if not analyzer.historical_data.empty:
+        inst_data = analyzer.historical_data[
+            analyzer.historical_data['institution_id'] == selected_institution
+        ]
+        if not inst_data.empty:
+            institution_name = inst_data['institution_name'].iloc[0]
+    
+    st.subheader(f"📁 Document Checklist for {institution_name}")
+    
+    # Display document checklist
+    display_document_checklist(selected_institution, approval_type, analyzer)
+    
+    # Analysis and recommendations
+    if st.button("🤖 Analyze Document Sufficiency", type="primary"):
+        perform_document_analysis(selected_institution, approval_type, analyzer)
+
+def perform_document_analysis(institution_id, approval_type, analyzer):
+    """Perform document sufficiency analysis"""
+    
+    # Get counts from session state
+    counts = st.session_state.get('document_counts', {
+        'total_mandatory': 0,
+        'uploaded_mandatory': 0,
+        'total_supporting': 0,
+        'uploaded_supporting': 0,
+        'uploaded_doc_names': []
+    })
+    
+    total_mandatory = counts['total_mandatory']
+    uploaded_mandatory = counts['uploaded_mandatory']
+    total_supporting = counts['total_supporting']
+    uploaded_supporting = counts['uploaded_supporting']
+    uploaded_doc_names = counts['uploaded_doc_names']
+    
+    # Calculate percentages
+    mandatory_sufficiency = (uploaded_mandatory / total_mandatory) * 100 if total_mandatory > 0 else 0
+    overall_sufficiency = ((uploaded_mandatory + uploaded_supporting) / (total_mandatory + total_supporting)) * 100 if (total_mandatory + total_supporting) > 0 else 0
+    
+    # Display analysis results
+    st.subheader("📊 Document Sufficiency Analysis")
+    
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.subheader("Document Analysis Dashboard")
+        st.metric("Mandatory Uploaded", f"{uploaded_mandatory}/{total_mandatory}")
+    
+    with col2:
+        st.metric("Mandatory Sufficiency", f"{mandatory_sufficiency:.1f}%")
+    
+    with col3:
+        st.metric("Supporting Uploaded", f"{uploaded_supporting}/{total_supporting}")
+    
+    with col4:
+        st.metric("Total Documents", f"{len(uploaded_doc_names)}")
+    
+    # Progress bars for visualization
+    st.subheader("📈 Progress Visualization")
+    
+    st.write("**Mandatory Documents Progress**")
+    st.progress(min(mandatory_sufficiency / 100, 1.0))
+    st.write(f"{mandatory_sufficiency:.1f}% complete")
+    
+    if total_supporting > 0:
+        supporting_sufficiency = (uploaded_supporting / total_supporting) * 100
+        st.write("**Supporting Documents Progress**")
+        st.progress(min(supporting_sufficiency / 100, 1.0))
+        st.write(f"{supporting_sufficiency:.1f}% complete")
+    
+    # Generate recommendations
+    st.subheader("💡 AI Recommendations")
+    
+    if mandatory_sufficiency < 50:
+        st.error("**❌ Critical Issue**: Less than 50% of mandatory documents uploaded.")
+        st.write("**Action Required**: Upload all mandatory documents to proceed with approval process.")
+        st.write("**Impact**: Application cannot be processed without mandatory documents.")
+    
+    elif mandatory_sufficiency < 80:
+        st.warning("**🟡 Attention Needed**: Some mandatory documents are missing.")
+        st.write("**Recommended Action**: Complete mandatory document upload for smoother approval process.")
+        st.write("**Impact**: Delays in approval process expected.")
+    
+    elif mandatory_sufficiency < 100:
+        st.info("**🔵 Good Progress**: Most mandatory documents are uploaded.")
+        st.write("**Next Steps**: Complete remaining mandatory documents and consider uploading supporting documents.")
+        st.write("**Impact**: Approval process can proceed with minor delays.")
+    
+    else:
+        st.success("**✅ Excellent**: All mandatory documents are uploaded!")
+        st.write("**Next Steps**: Consider uploading supporting documents for enhanced assessment.")
+        st.write("**Impact**: Ready for comprehensive evaluation.")
+    
+    # Missing documents analysis
+    requirements = get_document_requirements_by_parameters(approval_type)
+    missing_mandatory = []
+    
+    for param_docs in requirements["mandatory"].values():
+        for doc in param_docs:
+            found = False
+            for uploaded_doc in uploaded_doc_names:
+                if doc.lower() in uploaded_doc.lower():
+                    found = True
+                    break
+            if not found:
+                missing_mandatory.append(doc)
+    
+    if missing_mandatory:
+        st.error("**Missing Mandatory Documents:**")
+        for doc in missing_mandatory:
+            st.write(f"• {doc}")
+    else:
+        st.success("**✅ All mandatory documents are present!**")
+    
+    # Parameter-wise analysis
+    st.subheader("📋 Parameter-wise Coverage")
+    
+    for parameter, documents in requirements["mandatory"].items():
+        uploaded_count = 0
+        for doc in documents:
+            for uploaded_doc in uploaded_doc_names:
+                if doc.lower() in uploaded_doc.lower():
+                    uploaded_count += 1
+                    break
         
-        # Institution selection
-        current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
-        selected_institution = st.selectbox(
-            "Select Institution",
-            current_institutions,
-            key="doc_analysis_institution"
-        )
-        
-        approval_type = st.selectbox(
-            "Select Approval Type",
-            ["new_approval", "renewal_approval", "expansion_approval"],
-            format_func=lambda x: x.replace('_', ' ').title(),
-            key="doc_analysis_approval_type"
-        )
-        
-        # Get institution name for display
-        institution_name = "Unknown Institution"
-        if not analyzer.historical_data.empty:
-            inst_data = analyzer.historical_data[
-                analyzer.historical_data['institution_id'] == selected_institution
-            ]
-            if not inst_data.empty:
-                institution_name = inst_data['institution_name'].iloc[0]
-        
-        st.subheader(f"📁 Document Checklist for {institution_name}")
-        
-        # Display document checklist
-        display_document_checklist(selected_institution, approval_type, analyzer)
-        
-        # Analysis and recommendations
-        if st.button("🤖 Analyze Document Sufficiency", type="primary"):
-            analyze_document_sufficiency(selected_institution, approval_type, analyzer)
+        coverage = (uploaded_count / len(documents)) * 100
+        st.write(f"**{parameter}**: {uploaded_count}/{len(documents)} documents ({coverage:.1f}%)")
+        st.progress(min(coverage / 100, 1.0))
+    
+    # Approval readiness assessment
+    st.subheader("🎯 Approval Readiness Assessment")
+    
+    if mandatory_sufficiency == 100:
+        st.success("**🏆 FULLY READY FOR APPROVAL**")
+        st.write("All mandatory documents are uploaded. Institution is ready for comprehensive evaluation.")
+    elif mandatory_sufficiency >= 80:
+        st.warning("**📋 NEARLY READY**")
+        st.write("Most mandatory documents are uploaded. Minor additions needed for full readiness.")
+    elif mandatory_sufficiency >= 50:
+        st.info("**🔄 IN PROGRESS**")
+        st.write("Significant progress made, but important documents are still missing.")
+    else:
+        st.error("**🚨 NOT READY**")
+        st.write("Critical documents missing. Cannot proceed with approval process.")
 
 def display_document_checklist(institution_id, approval_type, analyzer):
     """Display the document checklist with upload status"""
@@ -3077,20 +3199,31 @@ def display_document_checklist(institution_id, approval_type, analyzer):
     requirements = get_document_requirements_by_parameters(approval_type)
     
     # Get uploaded documents for this institution
+    uploaded_doc_names = []
     try:
         uploaded_docs = analyzer.get_institution_documents(institution_id)
-        uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
-    except:
-        uploaded_doc_names = []
+        if not uploaded_docs.empty:
+            uploaded_doc_names = uploaded_docs['document_name'].tolist()
+    except Exception as e:
+        st.warning(f"Could not load uploaded documents: {e}")
     
     # Display mandatory documents
     st.subheader("📋 Mandatory Documents Checklist")
     
+    total_mandatory = 0
+    uploaded_mandatory = 0
+    
     for parameter, documents in requirements["mandatory"].items():
         with st.expander(f"✅ {parameter} - Mandatory Documents", expanded=True):
             for doc in documents:
+                total_mandatory += 1
                 # Check if document is uploaded
-                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names) if uploaded_doc_names else False
+                is_uploaded = False
+                for uploaded_doc in uploaded_doc_names:
+                    if doc.lower() in uploaded_doc.lower():
+                        is_uploaded = True
+                        uploaded_mandatory += 1
+                        break
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -3108,11 +3241,20 @@ def display_document_checklist(institution_id, approval_type, analyzer):
     # Display supporting documents
     st.subheader("📝 Supporting Documents Checklist")
     
+    total_supporting = 0
+    uploaded_supporting = 0
+    
     for parameter, documents in requirements["supporting"].items():
         with st.expander(f"📊 {parameter} - Supporting Documents"):
             for doc in documents:
+                total_supporting += 1
                 # Check if document is uploaded
-                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names) if uploaded_doc_names else False
+                is_uploaded = False
+                for uploaded_doc in uploaded_doc_names:
+                    if doc.lower() in uploaded_doc.lower():
+                        is_uploaded = True
+                        uploaded_supporting += 1
+                        break
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -3126,41 +3268,45 @@ def display_document_checklist(institution_id, approval_type, analyzer):
                         st.markdown("**Uploaded** ✅")
                     else:
                         st.markdown("**Optional** 🔄")
+    
+    # Store counts for analysis
+    st.session_state.document_counts = {
+        'total_mandatory': total_mandatory,
+        'uploaded_mandatory': uploaded_mandatory,
+        'total_supporting': total_supporting,
+        'uploaded_supporting': uploaded_supporting,
+        'uploaded_doc_names': uploaded_doc_names
+    }
 
 def get_document_requirements_by_parameters(approval_type):
     """Get document requirements organized by the 10 parameters"""
     
+    # Simplified requirements for stability
     base_requirements = {
         "new_approval": {
             "mandatory": {
                 "Curriculum": [
-                    "Curriculum framework and syllabus documents",
-                    "Course outlines with learning objectives",
-                    "Curriculum review and revision processes",
-                    "Academic calendar and course schedules"
+                    "Curriculum framework documents",
+                    "Course outlines and objectives",
+                    "Academic calendar"
                 ],
                 "Faculty Resources": [
-                    "Faculty recruitment policy and procedures",
-                    "Faculty qualification records and biodata",
-                    "Selection committee composition and minutes",
-                    "Faculty development programs records"
+                    "Faculty qualification records",
+                    "Recruitment policy documents"
                 ],
-                "Learning and Teaching": [
-                    "Teaching plans and lesson schedules",
-                    "Student assessment records and methods",
-                    "Learning outcome achievement records",
-                    "Classroom observation reports"
+                "Governance": [
+                    "Institutional statutes",
+                    "Organizational structure"
                 ]
             },
             "supporting": {
-                "Curriculum": [
-                    "Innovative teaching-learning materials",
-                    "Industry interface documents",
-                    "Multidisciplinary courses documentation"
+                "Research": [
+                    "Research publications",
+                    "Project documentation"
                 ],
-                "Faculty Resources": [
-                    "Faculty achievement and award records",
-                    "Professional development plans"
+                "Infrastructure": [
+                    "Campus facility details",
+                    "Laboratory equipment list"
                 ]
             }
         },
@@ -3168,41 +3314,35 @@ def get_document_requirements_by_parameters(approval_type):
             "mandatory": {
                 "Curriculum": [
                     "Updated curriculum framework",
-                    "Stakeholder feedback reports",
-                    "Curriculum improvement records"
+                    "Academic performance reports"
                 ],
-                "Faculty Resources": [
+                "Faculty": [
                     "Updated faculty records",
-                    "Faculty development reports",
-                    "Performance appraisal records"
+                    "Development reports"
                 ]
             },
             "supporting": {
-                "Research and Innovation": [
-                    "Recent research publications",
-                    "Ongoing research projects"
-                ],
-                "Community Engagement": [
-                    "Community project reports",
-                    "Social impact assessments"
+                "Research": [
+                    "Recent publications",
+                    "Research projects"
                 ]
             }
         },
         "expansion_approval": {
             "mandatory": {
-                "Infrastructure Development": [
+                "Infrastructure": [
                     "Expansion master plan",
-                    "Additional infrastructure details"
+                    "Additional facilities plan"
                 ],
-                "Faculty Resources": [
-                    "Enhanced faculty recruitment plan",
-                    "Additional faculty requirements"
+                "Faculty": [
+                    "New faculty requirements",
+                    "Recruitment plan"
                 ]
             },
             "supporting": {
-                "Financial Resources": [
-                    "Expansion budget and funding",
-                    "Financial viability study"
+                "Financial": [
+                    "Expansion budget",
+                    "Funding plan"
                 ]
             }
         }
