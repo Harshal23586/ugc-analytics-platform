@@ -1409,7 +1409,7 @@ def create_institution_dashboard(analyzer, user):
         create_institution_document_upload(analyzer, user)
     
     with institution_tabs[1]:
-        create_institution_data_submission(analyzer, user)
+        create_systematic_data_submission_form(analyzer, user)
     
     with institution_tabs[2]:  # NEW TAB FOR SYSTEMATIC DATA FORM
         create_systematic_data_submission_form(analyzer, user)
