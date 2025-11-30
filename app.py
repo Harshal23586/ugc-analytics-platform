@@ -20,6 +20,8 @@ import base64
 import os
 import tempfile
 from pathlib import Path
+from datetime import datetime
+
 
 # RAG-specific imports
 import PyPDF2
@@ -1473,10 +1475,10 @@ def create_institution_approval_workflow(analyzer, user):
         },
         {
             "step": 2,
-            "title": "Data Submission",
-            "description": "Submit institutional performance data through Data Submission form",
+            "title": "Basic Data Submission",
+            "description": "Submit institutional performance data through Basic Data Submission form",
             "status": "Complete" if len(submissions) > 0 else "Pending", 
-            "action": "Go to Data Submission tab"
+            "action": "Go to Basic Data Submission tab"
         },
         {
             "step": 3,
@@ -1525,7 +1527,7 @@ def create_institution_approval_workflow(analyzer, user):
     
     with col2:
         if st.button("📝 Update Submission Data", type="secondary"):
-            st.session_state.active_tab = "Data Submission" 
+            st.session_state.active_tab = "Basic Data Submission" 
             st.rerun()
     
     with col3:
