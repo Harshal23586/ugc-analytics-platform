@@ -3192,6 +3192,7 @@ def perform_document_analysis(institution_id, approval_type, analyzer):
         st.error("**🚨 NOT READY**")
         st.write("Critical documents missing. Cannot proceed with approval process.")
 
+
 def display_document_checklist(institution_id, approval_type, analyzer):
     """Display the document checklist with upload status"""
     
@@ -3279,9 +3280,8 @@ def display_document_checklist(institution_id, approval_type, analyzer):
     }
 
 def get_document_requirements_by_parameters(approval_type):
-    """Get document requirements organized by the 10 parameters"""
+    """Get document requirements organized by parameters"""
     
-    # Simplified requirements for stability
     base_requirements = {
         "new_approval": {
             "mandatory": {
