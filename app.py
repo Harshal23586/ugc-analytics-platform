@@ -1209,21 +1209,38 @@ class InstitutionalAIAnalyzer:
         """Analyze document sufficiency and generate recommendations"""
     
         # Get uploaded documents
-        uploaded_docs = analyzer.get_institution_documents(institution_id)
-        uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+        try:
+            uploaded_docs = analyzer.get_institution_documents(institution_id)
+            uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+        except:
+            uploaded_doc_names = []
     
         # Get requirements
         requirements = get_document_requirements_by_parameters(approval_type)
     
         # Calculate sufficiency scores
-        mandatory_docs = [doc for param_docs in requirements["mandatory"].values() for doc in param_docs]
-        supporting_docs = [doc for param_docs in requirements["supporting"].values() for doc in param_docs]
+        mandatory_docs = []
+        for param_docs in requirements["mandatory"].values():
+            mandatory_docs.extend(param_docs)
     
-        mandatory_uploaded = sum(1 for doc in mandatory_docs if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
-        supporting_uploaded = sum(1 for doc in supporting_docs if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
+        supporting_docs = []
+        for param_docs in requirements["supporting"].values():
+            supporting_docs.extend(param_docs)
     
+        # Count uploaded documents
+        mandatory_uploaded = 0
+        for doc in mandatory_docs:
+            if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names):
+                mandatory_uploaded += 1
+    
+        supporting_uploaded = 0
+        for doc in supporting_docs:
+            if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names):
+                supporting_uploaded += 1
+    
+        # Calculate percentages
         mandatory_sufficiency = (mandatory_uploaded / len(mandatory_docs)) * 100 if mandatory_docs else 0
-        overall_sufficiency = ((mandatory_uploaded + supporting_uploaded) / (len(mandatory_docs) + len(supporting_docs))) * 100 if (mandatory_docs + supporting_docs) else 0
+        overall_sufficiency = ((mandatory_uploaded + supporting_uploaded) / (len(mandatory_docs) + len(supporting_docs))) * 100 if (mandatory_docs and supporting_docs) else mandatory_sufficiency
     
         # Display analysis results
         st.subheader("📊 Document Sufficiency Analysis")
@@ -1237,31 +1254,36 @@ class InstitutionalAIAnalyzer:
             st.metric("Overall Sufficiency", f"{overall_sufficiency:.1f}%")
     
         with col3:
-            st.metric("Total Documents", f"{len(uploaded_doc_names)}")
+            st.metric("Total Uploaded", f"{len(uploaded_doc_names)}")
     
-        # Visual gauge
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=mandatory_sufficiency,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Mandatory Documents Sufficiency"},
-            gauge={
-                'axis': {'range': [None, 100]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [0, 50], 'color': "lightgray"},
-                    {'range': [50, 80], 'color': "yellow"},
-                    {'range': [80, 100], 'color': "lightgreen"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 90
+        # Visual gauge for mandatory documents
+        try:
+            import plotly.graph_objects as go
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number+delta",
+                value=mandatory_sufficiency,
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "Mandatory Documents Sufficiency"},
+                gauge={
+                    'axis': {'range': [None, 100]},
+                    'bar': {'color': "darkblue"},
+                    'steps': [
+                        {'range': [0, 50], 'color': "lightgray"},
+                        {'range': [50, 80], 'color': "yellow"},
+                        {'range': [80, 100], 'color': "lightgreen"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 90
+                    }
                 }
-            }
-        ))
-        fig.update_layout(height=300)
-        st.plotly_chart(fig, use_container_width=True)
+            ))
+            fig.update_layout(height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        except:
+            st.info("📊 Mandatory Documents Sufficiency Visualization")
+            st.progress(mandatory_sufficiency / 100)
     
         # Generate recommendations
         st.subheader("💡 AI Recommendations")
@@ -1299,23 +1321,35 @@ class InstitutionalAIAnalyzer:
     
         param_coverage = {}
         for parameter, documents in requirements["mandatory"].items():
-            uploaded_count = sum(1 for doc in documents if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names))
+            uploaded_count = 0
+            for doc in documents:
+                if any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names):
+                    uploaded_count += 1
             total_count = len(documents)
             coverage = (uploaded_count / total_count) * 100 if total_count > 0 else 0
             param_coverage[parameter] = coverage
     
         # Create bar chart for parameter coverage
-        param_df = pd.DataFrame({
-            'Parameter': list(param_coverage.keys()),
-            'Coverage (%)': list(param_coverage.values())
-        })
-    
-        fig = px.bar(param_df, x='Parameter', y='Coverage (%)', 
-                     title="Document Coverage by Parameter",
-                     color='Coverage (%)',
-                     color_continuous_scale='RdYlGn')
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            import plotly.express as px
+            import pandas as pd
+        
+            param_df = pd.DataFrame({
+                'Parameter': list(param_coverage.keys()),
+                'Coverage (%)': list(param_coverage.values())
+            })
+        
+            fig = px.bar(param_df, x='Parameter', y='Coverage (%)', 
+                         title="Document Coverage by Parameter",
+                         color='Coverage (%)',
+                         color_continuous_scale='RdYlGn')
+            fig.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
+        except:
+            # Fallback display if plotly fails
+            for param, coverage in param_coverage.items():
+                st.write(f"**{param}**: {coverage:.1f}% coverage")
+                st.progress(coverage / 100)
     
     def generate_document_recommendations(self, mandatory_sufficiency: float) -> List[str]:
         """Generate recommendations based on document sufficiency"""
@@ -3019,37 +3053,44 @@ def create_document_analysis_module(analyzer):
         )
         
         # Get institution name for display
-        institution_name = analyzer.historical_data[
-            analyzer.historical_data['institution_id'] == selected_institution
-        ]['institution_name'].iloc[0] if not analyzer.historical_data.empty else "Unknown Institution"
+        institution_name = "Unknown Institution"
+        if not analyzer.historical_data.empty:
+            inst_data = analyzer.historical_data[
+                analyzer.historical_data['institution_id'] == selected_institution
+            ]
+            if not inst_data.empty:
+                institution_name = inst_data['institution_name'].iloc[0]
         
         st.subheader(f"📁 Document Checklist for {institution_name}")
         
-        # Document requirements based on 10 parameters
-        document_requirements = get_document_requirements_by_parameters(approval_type)
-        
         # Display document checklist
-        display_document_checklist(document_requirements, selected_institution, analyzer)
+        display_document_checklist(selected_institution, approval_type, analyzer)
         
         # Analysis and recommendations
         if st.button("🤖 Analyze Document Sufficiency", type="primary"):
             analyze_document_sufficiency(selected_institution, approval_type, analyzer)
 
-def display_document_checklist(document_requirements, institution_id, analyzer):
+def display_document_checklist(institution_id, approval_type, analyzer):
     """Display the document checklist with upload status"""
     
+    # Get requirements
+    requirements = get_document_requirements_by_parameters(approval_type)
+    
     # Get uploaded documents for this institution
-    uploaded_docs = analyzer.get_institution_documents(institution_id)
-    uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+    try:
+        uploaded_docs = analyzer.get_institution_documents(institution_id)
+        uploaded_doc_names = uploaded_docs['document_name'].tolist() if not uploaded_docs.empty else []
+    except:
+        uploaded_doc_names = []
     
     # Display mandatory documents
     st.subheader("📋 Mandatory Documents Checklist")
     
-    for parameter, documents in document_requirements["mandatory"].items():
+    for parameter, documents in requirements["mandatory"].items():
         with st.expander(f"✅ {parameter} - Mandatory Documents", expanded=True):
             for doc in documents:
                 # Check if document is uploaded
-                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names)
+                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names) if uploaded_doc_names else False
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -3067,11 +3108,11 @@ def display_document_checklist(document_requirements, institution_id, analyzer):
     # Display supporting documents
     st.subheader("📝 Supporting Documents Checklist")
     
-    for parameter, documents in document_requirements["supporting"].items():
+    for parameter, documents in requirements["supporting"].items():
         with st.expander(f"📊 {parameter} - Supporting Documents"):
             for doc in documents:
                 # Check if document is uploaded
-                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names)
+                is_uploaded = any(doc.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_doc_names) if uploaded_doc_names else False
                 
                 col1, col2 = st.columns([3, 1])
                 with col1:
@@ -3109,44 +3150,17 @@ def get_document_requirements_by_parameters(approval_type):
                     "Student assessment records and methods",
                     "Learning outcome achievement records",
                     "Classroom observation reports"
-                ],
-                "Research and Innovation": [
-                    "Research policy document",
-                    "Research publication records",
-                    "Patent filings and grants documentation",
-                    "Research project funding details"
-                ],
-                "Governance and Administration": [
-                    "Institutional act, statutes, and regulations",
-                    "Organizational structure chart",
-                    "Governance body composition and minutes",
-                    "Financial management policies"
                 ]
             },
             "supporting": {
                 "Curriculum": [
                     "Innovative teaching-learning materials",
                     "Industry interface documents",
-                    "Multidisciplinary courses documentation",
-                    "Skill-integration evidence"
+                    "Multidisciplinary courses documentation"
                 ],
                 "Faculty Resources": [
                     "Faculty achievement and award records",
-                    "Professional development plans",
-                    "Faculty research records",
-                    "Industry exposure evidence"
-                ],
-                "Infrastructure Development": [
-                    "Campus master plan and layout",
-                    "Building and facility inventory",
-                    "Laboratory and equipment details",
-                    "IT infrastructure details"
-                ],
-                "Financial Resources": [
-                    "Annual financial statements",
-                    "Budget allocation certificates",
-                    "Research grant utilization details",
-                    "Infrastructure development expenditure"
+                    "Professional development plans"
                 ]
             }
         },
@@ -3155,52 +3169,22 @@ def get_document_requirements_by_parameters(approval_type):
                 "Curriculum": [
                     "Updated curriculum framework",
                     "Stakeholder feedback reports",
-                    "Curriculum improvement records",
-                    "Academic performance reports"
+                    "Curriculum improvement records"
                 ],
                 "Faculty Resources": [
                     "Updated faculty records",
                     "Faculty development reports",
-                    "Performance appraisal records",
-                    "Faculty retention statistics"
-                ],
-                "Learning and Teaching": [
-                    "Student performance analysis",
-                    "Teaching effectiveness reports",
-                    "Digital learning integration",
-                    "Student feedback compilation"
-                ],
-                "Research and Innovation": [
-                    "Recent research publications",
-                    "Ongoing research projects",
-                    "Research collaboration agreements",
-                    "Innovation and patent updates"
-                ],
-                "Governance and Administration": [
-                    "Updated governance documents",
-                    "Compliance audit reports",
-                    "Administrative efficiency reports",
-                    "Stakeholder satisfaction surveys"
+                    "Performance appraisal records"
                 ]
             },
             "supporting": {
+                "Research and Innovation": [
+                    "Recent research publications",
+                    "Ongoing research projects"
+                ],
                 "Community Engagement": [
                     "Community project reports",
-                    "Social impact assessments",
-                    "Outreach program records",
-                    "CSR initiative documentation"
-                ],
-                "Green Initiatives": [
-                    "Environmental policy updates",
-                    "Sustainability reports",
-                    "Energy consumption records",
-                    "Waste management documentation"
-                ],
-                "Extracurricular Activities": [
-                    "Student activity records",
-                    "Leadership program reports",
-                    "Cultural event documentation",
-                    "Sports infrastructure details"
+                    "Social impact assessments"
                 ]
             }
         },
@@ -3208,41 +3192,17 @@ def get_document_requirements_by_parameters(approval_type):
             "mandatory": {
                 "Infrastructure Development": [
                     "Expansion master plan",
-                    "Additional infrastructure details",
-                    "Laboratory expansion plans",
-                    "Digital infrastructure upgrades"
+                    "Additional infrastructure details"
                 ],
                 "Faculty Resources": [
                     "Enhanced faculty recruitment plan",
-                    "Additional faculty requirements",
-                    "Faculty development for expansion",
-                    "Specialized faculty profiles"
-                ],
-                "Curriculum": [
-                    "New program curriculum",
-                    "Expanded course offerings",
-                    "Industry alignment documents",
-                    "Market demand analysis"
-                ],
-                "Financial Resources": [
-                    "Expansion budget and funding",
-                    "Financial viability study",
-                    "Revenue projections",
-                    "Investment plans"
+                    "Additional faculty requirements"
                 ]
             },
             "supporting": {
-                "Research and Innovation": [
-                    "Expanded research facilities",
-                    "New research collaborations",
-                    "Innovation center plans",
-                    "IPR expansion strategy"
-                ],
-                "Community Engagement": [
-                    "Enhanced community programs",
-                    "Expanded outreach plans",
-                    "Social impact projections",
-                    "Stakeholder engagement strategy"
+                "Financial Resources": [
+                    "Expansion budget and funding",
+                    "Financial viability study"
                 ]
             }
         }
