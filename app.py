@@ -1539,6 +1539,208 @@ def create_institution_document_upload(analyzer, user):
         key="inst_approval_type"
     )
     
+    # NEW: Document Parameter Selection
+    document_parameter = st.selectbox(
+        "Select Document Parameter",
+        [
+            "Curriculum",
+            "Faculty Resources", 
+            "Learning and Teaching",
+            "Research and Innovation",
+            "Extracurricular & Co-curricular Activities",
+            "Community Engagement",
+            "Green Initiatives",
+            "Governance and Administration",
+            "Infrastructure Development",
+            "Financial Resources and Management"
+        ],
+        key="doc_parameter"
+    )
+    
+    # NEW: Mandatory Documents dropdown based on selected parameter
+    mandatory_documents_map = {
+        "Curriculum": [
+            "Curriculum framework and syllabus documents for all programs",
+            "Course outlines with learning objectives and outcomes",
+            "Evidence of curriculum review and revision processes",
+            "Student feedback reports on curriculum",
+            "Faculty feedback on curriculum implementation",
+            "Records of stakeholder consultations for curriculum development",
+            "Academic calendar and course schedules"
+        ],
+        "Faculty Resources": [
+            "Faculty recruitment policy and procedures",
+            "Faculty qualification records and biodata",
+            "Selection committee composition and minutes",
+            "Faculty development programs records",
+            "Faculty appraisal and performance records",
+            "Diversity statistics (gender, social inclusion)",
+            "Faculty-student ratio documentation"
+        ],
+        "Learning and Teaching": [
+            "Teaching plans and lesson schedules",
+            "Student assessment records and evaluation methods",
+            "Learning outcome achievement records",
+            "Classroom observation reports",
+            "Student performance analysis reports",
+            "Digital learning infrastructure details"
+        ],
+        "Research and Innovation": [
+            "Research policy document",
+            "Research publication records (citations, impact factors)",
+            "Patent filings and grants documentation",
+            "Research project funding details",
+            "Research collaboration agreements",
+            "IPR policy and implementation records"
+        ],
+        "Extracurricular & Co-curricular Activities": [
+            "EC/CC activity calendar and schedules",
+            "Student participation records",
+            "Activity reports and outcomes",
+            "Credit allocation policy for EC/CC activities"
+        ],
+        "Community Engagement": [
+            "Community engagement policy",
+            "Outreach program records and reports",
+            "Social project documentation",
+            "Village/community adoption records",
+            "Student internship reports with community focus"
+        ],
+        "Green Initiatives": [
+            "Environmental policy document",
+            "Energy consumption and conservation records",
+            "Waste management system documentation",
+            "Water harvesting and recycling records",
+            "Green building certification (if any)",
+            "Carbon footprint assessment"
+        ],
+        "Governance and Administration": [
+            "Institutional act, statutes, and regulations",
+            "Organizational structure chart",
+            "Governance body composition and minutes",
+            "Financial management policies",
+            "Grievance redressal mechanism records",
+            "Enrollment statistics and diversity reports"
+        ],
+        "Infrastructure Development": [
+            "Campus master plan and layout",
+            "Building and facility inventory",
+            "Laboratory and equipment details",
+            "Library resource documentation",
+            "IT infrastructure details",
+            "Hostel and residential facility records"
+        ],
+        "Financial Resources and Management": [
+            "Annual financial statements and audit reports",
+            "Budget allocation and utilization certificates",
+            "Salary expenditure records",
+            "Research grant utilization details",
+            "Infrastructure development expenditure",
+            "Donation and CSR fund records"
+        ]
+    }
+    
+    mandatory_document = st.selectbox(
+        "Select Mandatory Document",
+        mandatory_documents_map.get(document_parameter, []),
+        key="mandatory_doc"
+    )
+    
+    # NEW: Supporting Documents dropdown based on selected parameter
+    supporting_documents_map = {
+        "Curriculum": [
+            "Innovative teaching-learning materials developed",
+            "Records of curriculum innovation and updates",
+            "Industry interface documents for curriculum design",
+            "Documentation of multidisciplinary courses",
+            "Evidence of skill-integration in curriculum",
+            "Records of vocational and skill-based courses",
+            "Publications/patents arising from curriculum implementation"
+        ],
+        "Faculty Resources": [
+            "Faculty achievement and award records",
+            "Participation in Malviya Mission/other development programs",
+            "Records of faculty mentoring programs",
+            "Faculty research and publication records",
+            "Evidence of faculty industry exposure",
+            "Faculty participation in national/international conferences",
+            "Professional development plans"
+        ],
+        "Learning and Teaching": [
+            "Innovative teaching methodology documentation",
+            "Experiential learning activity records",
+            "Field work and practical training reports",
+            "Student project documentation",
+            "Research-oriented learning evidence",
+            "Digital technology integration records",
+            "Critical thinking development activities"
+        ],
+        "Research and Innovation": [
+            "Research facility details and utilization",
+            "Research seminar/conference organization records",
+            "Industry research partnership documents",
+            "Student research participation records",
+            "Translational research outcomes",
+            "Research awards and recognition",
+            "Interdisciplinary research projects"
+        ],
+        "Extracurricular & Co-curricular Activities": [
+            "Awards and achievements in EC/CC activities",
+            "Student club and society records",
+            "Cultural and sports event documentation",
+            "Leadership development program records",
+            "Community service activity reports",
+            "Student representation in governance bodies"
+        ],
+        "Community Engagement": [
+            "Community feedback and impact assessment",
+            "Collaborative project agreements",
+            "Social research publications",
+            "CSR initiative documentation",
+            "Public awareness campaign records",
+            "Extension activity participation records"
+        ],
+        "Green Initiatives": [
+            "Renewable energy installation details",
+            "Environmental audit reports",
+            "Sustainability project documentation",
+            "Green campus initiative records",
+            "Environmental awareness program reports",
+            "Biodiversity conservation efforts"
+        ],
+        "Governance and Administration": [
+            "e-Governance implementation details",
+            "Strategic plans and implementation reports",
+            "International collaboration agreements",
+            "Administrative innovation records",
+            "Stakeholder satisfaction surveys",
+            "Compliance and audit reports",
+            "Decision-making process documentation"
+        ],
+        "Infrastructure Development": [
+            "Infrastructure utilization reports",
+            "Maintenance and upgrade records",
+            "Safety and security system details",
+            "Accessibility compliance documentation",
+            "Future development plans",
+            "Specialized facility details (auditorium, sports complex)"
+        ],
+        "Financial Resources and Management": [
+            "Financial planning documents",
+            "Resource mobilization records",
+            "Investment in academic development",
+            "Student scholarship and financial aid details",
+            "Revenue generation from various sources",
+            "Financial sustainability analysis"
+        ]
+    }
+    
+    supporting_document = st.selectbox(
+        "Select Supporting Document",
+        supporting_documents_map.get(document_parameter, []),
+        key="supporting_doc"
+    )
+    
     uploaded_files = st.file_uploader(
         "Upload Institutional Documents",
         type=['pdf', 'doc', 'docx', 'xlsx', 'jpg', 'png'],
@@ -1553,13 +1755,25 @@ def create_institution_document_upload(analyzer, user):
         for i, file in enumerate(uploaded_files):
             doc_type = st.selectbox(
                 f"Document type for: {file.name}",
-                ["affidavit_legal_status", "land_documents", "building_plan_approval", 
-                 "financial_solvency_certificate", "faculty_recruitment_plan", 
-                 "academic_curriculum", "annual_reports", "research_publications",
-                 "placement_records", "other"],
+                [
+                    "affidavit_legal_status", "land_documents", "building_plan_approval", 
+                    "financial_solvency_certificate", "faculty_recruitment_plan", 
+                    "academic_curriculum", "annual_reports", "research_publications",
+                    "placement_records", "other"
+                ],
                 key=f"inst_doc_type_{i}"
             )
             document_types.append(doc_type)
+        
+        # Display selected document information
+        st.subheader("📋 Selected Document Information")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.info(f"**Parameter:** {document_parameter}")
+        with col2:
+            st.info(f"**Mandatory Doc:** {mandatory_document}")
+        with col3:
+            st.info(f"**Supporting Doc:** {supporting_document}")
         
         if st.button("💾 Upload Documents"):
             # Save documents
