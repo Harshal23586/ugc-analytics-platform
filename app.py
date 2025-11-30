@@ -132,18 +132,34 @@ st.set_page_config(
 class RAGDataExtractor:
     def __init__(self):
         try:
-            # Initialize with CPU explicitly and handle meta tensor issue
+            # Import torch first
             import torch
-            # Check if CUDA is available but force CPU for stability
-            device = 'cpu'
+            
+            # Set device to CPU explicitly
+            device = torch.device('cpu')
             
             # Load model with safe initialization
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+            # Use a smaller, more compatible model
+            model_name = 'sentence-transformers/all-MiniLM-L6-v2'
             
-            # Ensure model is properly initialized
+            # Initialize with device mapping to avoid meta tensor issues
+            self.embedding_model = SentenceTransformer(
+                model_name, 
+                device='cpu',
+                cache_folder='./model_cache'
+            )
+            
+            # Force model to CPU and ensure proper initialization
             if hasattr(self.embedding_model, 'to'):
-                self.embedding_model.to(device)
+                self.embedding_model = self.embedding_model.to(device)
             
+            # Test the model with a small inference
+            test_embedding = self.embedding_model.encode(["test sentence"])
+            if test_embedding is not None:
+                st.success("✅ RAG System with embeddings initialized successfully")
+            else:
+                raise Exception("Test embedding failed")
+                
             self.text_splitter = SimpleTextSplitter(
                 chunk_size=1000,
                 chunk_overlap=200
@@ -151,11 +167,9 @@ class RAGDataExtractor:
             self.vector_store = None
             self.documents = []
             
-            st.success("✅ RAG System initialized successfully on CPU")
-            
         except Exception as e:
-            st.warning(f"⚠️ RAG system initialized in fallback mode: {e}")
-            # Fallback: create a simple dummy embedding model
+            st.warning(f"⚠️ RAG system using lightweight mode: {e}")
+            # Use a lightweight alternative - TF-IDF based approach
             self.embedding_model = None
             self.text_splitter = SimpleTextSplitter(
                 chunk_size=1000,
@@ -163,86 +177,86 @@ class RAGDataExtractor:
             )
             self.vector_store = None
             self.documents = []
+            self._setup_lightweight_analyzer()
+
+    def _setup_lightweight_analyzer(self):
+        """Setup lightweight text analysis without heavy embeddings"""
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+            self.tfidf_matrix = None
+            self.document_texts = []
+        except:
+            self.vectorizer = None
 
     def build_vector_store(self, documents: List[RAGDocument]):
-        """Build simple vector store from documents"""
-        if not documents or self.embedding_model is None:
-            st.warning("No documents or embedding model available for vector store")
+        """Build vector store from documents with fallback options"""
+        if not documents:
             return None
         
-        try:
-            texts = [doc.page_content for doc in documents]
-            if not texts:
-                st.warning("No text content available for vector store")
-                return None
+        texts = [doc.page_content for doc in documents]
+        if not texts:
+            return None
             
-            # Safe embedding generation
-            try:
+        try:
+            # Try using the embedding model first
+            if self.embedding_model is not None:
                 embeddings = self.embedding_model.encode(texts)
-            except Exception as embed_error:
-                st.warning(f"Embedding generation failed: {embed_error}")
-                return None
-        
-            # Create text-embedding pairs for our simple vector store
-            text_embeddings = list(zip(texts, embeddings))
-            self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
-            self.documents = documents
-            st.success(f"✅ Vector store built with {len(documents)} documents")
-            
-        except Exception as e:
-            st.error(f"Error building vector store: {e}")
-            return None
-
-    def extract_text_from_file(self, file) -> str:
-        """Extract text from various file formats with enhanced error handling"""
-        text = ""
-        file_extension = file.name.split('.')[-1].lower()
-        
-        try:
-            if file_extension == 'pdf':
-                try:
-                    pdf_reader = PyPDF2.PdfReader(file)
-                    for page in pdf_reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
-                    if not text.strip():
-                        st.warning(f"PDF file {file.name} appears to be empty or scanned (image-based)")
-                except Exception as pdf_error:
-                    st.warning(f"PDF extraction issue for {file.name}: {str(pdf_error)}")
-                    
-            elif file_extension in ['doc', 'docx']:
-                try:
-                    doc = docx.Document(file)
-                    for paragraph in doc.paragraphs:
-                        if paragraph.text:
-                            text += paragraph.text + "\n"
-                except Exception as doc_error:
-                    st.warning(f"DOCX extraction issue for {file.name}: {str(doc_error)}")
-                    
-            elif file_extension in ['txt']:
-                try:
-                    text = file.getvalue().decode('utf-8')
-                except Exception as txt_error:
-                    st.warning(f"TXT extraction issue for {file.name}: {str(txt_error)}")
-                    
-            elif file_extension in ['xlsx', 'xls']:
-                try:
-                    df = pd.read_excel(file)
-                    text = df.to_string()
-                except Exception as excel_error:
-                    st.warning(f"Excel extraction issue for {file.name}: {str(excel_error)}")
-                
+                text_embeddings = list(zip(texts, embeddings))
+                self.vector_store = SimpleVectorStore(self.embedding_model).from_embeddings(text_embeddings)
+                self.documents = documents
+                st.success(f"✅ Vector store built with {len(documents)} documents using embeddings")
+            elif hasattr(self, 'vectorizer') and self.vectorizer is not None:
+                # Fallback to TF-IDF
+                self.tfidf_matrix = self.vectorizer.fit_transform(texts)
+                self.document_texts = texts
+                self.documents = documents
+                st.success(f"✅ Vector store built with {len(documents)} documents using TF-IDF")
             else:
-                st.warning(f"Unsupported file format: {file_extension} for {file.name}")
+                # Basic text storage
+                self.document_texts = texts
+                self.documents = documents
+                st.success(f"✅ Documents stored for basic search ({len(documents)} documents)")
                 
         except Exception as e:
-            st.error(f"Error extracting text from {file.name}: {str(e)}")
+            st.warning(f"Vector store creation using basic storage: {e}")
+            # Basic storage as fallback
+            self.document_texts = texts
+            self.documents = documents
+
+    def query_documents_lightweight(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
+        """Lightweight document query using TF-IDF or basic text matching"""
+        if not hasattr(self, 'document_texts') or not self.document_texts:
+            return []
             
-        return text
+        results = []
+        
+        # Simple keyword-based matching
+        query_terms = set(query.lower().split())
+        
+        for i, text in enumerate(self.document_texts):
+            if not text:
+                continue
+                
+            text_terms = set(text.lower().split())
+            common_terms = query_terms.intersection(text_terms)
+            
+            if common_terms:
+                # Simple relevance score based on term overlap
+                score = len(common_terms) / len(query_terms)
+                if score > 0.1:  # Minimum threshold
+                    doc = RAGDocument(
+                        page_content=text[:500] + "..." if len(text) > 500 else text,
+                        metadata={"similarity_score": float(score), "source": "lightweight_search"}
+                    )
+                    results.append((doc, float(score)))
+        
+        # Sort by score and return top k
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results[:k]
 
     def extract_comprehensive_data(self, uploaded_files: List) -> Dict[str, Any]:
-        """Extract comprehensive data from all uploaded files with enhanced error handling"""
+        """Extract comprehensive data from all uploaded files"""
         all_text = ""
         all_structured_data = {
             'academic_metrics': {},
@@ -256,27 +270,29 @@ class RAGDataExtractor:
         }
     
         documents = []
+        processed_count = 0
     
         for file in uploaded_files:
             try:
                 # Extract text
                 text = self.extract_text_from_file(file)
-                if not text.strip():
-                    st.warning(f"No text extracted from {file.name}")
+                if not text or not text.strip():
+                    st.warning(f"No extractable text found in {file.name}")
+                    all_structured_data['file_names'].append(file.name)
                     continue
                     
                 cleaned_text = self.preprocess_text(text)
                 all_text += cleaned_text + "\n\n"
             
-                # Create document for vector store
+                # Create document for analysis
                 doc = RAGDocument(
                     page_content=cleaned_text,
                     metadata={"source": file.name, "type": "institutional_data"}
                 )
                 documents.append(doc)
             
-                # Extract structured data
-                file_data = self.extract_structured_data(cleaned_text)
+                # Extract structured data using enhanced pattern matching
+                file_data = self.extract_structured_data_enhanced(cleaned_text, file.name)
             
                 # Merge data from all files
                 for category in file_data:
@@ -284,25 +300,120 @@ class RAGDataExtractor:
                         all_structured_data[category].update(file_data[category])
             
                 all_structured_data['file_names'].append(file.name)
-                st.success(f"✅ Processed {file.name}")
+                processed_count += 1
+                
+                st.success(f"✅ Processed {file.name} - extracted {len(file_data)} data categories")
             
             except Exception as e:
                 st.error(f"Error processing {file.name}: {str(e)}")
+                all_structured_data['file_names'].append(file.name)
                 continue
     
-        # Build vector store for semantic search (only if embedding model is available and we have documents)
-        if documents and self.embedding_model is not None:
-            try:
-                self.build_vector_store(documents)
-                st.success("✅ Document processing and vector store creation completed")
-            except Exception as e:
-                st.warning(f"Vector store creation skipped: {e}")
+        # Build search index
+        if documents:
+            self.build_vector_store(documents)
+            st.success(f"✅ Successfully processed {processed_count}/{len(uploaded_files)} files")
         else:
-            st.info("ℹ️ Vector store not created (no documents or embedding model unavailable)")
+            st.warning("⚠️ No documents were successfully processed")
     
         all_structured_data['raw_text'] = all_text
     
         return all_structured_data
+
+    def extract_structured_data_enhanced(self, text: str, filename: str) -> Dict[str, Any]:
+        """Enhanced structured data extraction with better pattern matching"""
+        data = {
+            'academic_metrics': {},
+            'research_metrics': {},
+            'infrastructure_metrics': {},
+            'governance_metrics': {},
+            'student_metrics': {},
+            'financial_metrics': {}
+        }
+        
+        # Enhanced patterns for academic metrics
+        academic_patterns = {
+            'naac_grade': [
+                r'NAAC\s*(?:grade|accreditation|score)[:\s]*([A+]+)',
+                r'Accreditation\s*(?:Grade|Status)[:\s]*([A+]+)',
+                r'Grade\s*[:\s]*([A+]+)'
+            ],
+            'nirf_ranking': [
+                r'NIRF\s*(?:rank|ranking)[:\s]*(\d+)',
+                r'National.*Ranking[:\s]*(\d+)',
+                r'Rank[:\s]*(\d+).*NIRF'
+            ],
+            'student_faculty_ratio': [
+                r'(?:student|student-faculty)\s*(?:ratio|ratio:)[:\s]*(\d+(?:\.\d+)?)',
+                r'Faculty.*Student[:\s]*(\d+(?:\.\d+)?)',
+                r'Ratio[:\s]*(\d+(?:\.\d+)?).*student.*faculty'
+            ]
+        }
+        
+        # Research metrics patterns
+        research_patterns = {
+            'research_publications': [
+                r'research\s*(?:publications|papers)[:\s]*(\d+)',
+                r'publications[:\s]*(\d+)',
+                r'published\s*(?:papers|articles)[:\s]*(\d+)'
+            ],
+            'research_grants': [
+                r'research\s*(?:grants|funding)[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)',
+                r'grants.*received[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)',
+                r'funding.*amount[:\s]*[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)'
+            ]
+        }
+        
+        # Extract data using multiple patterns
+        for category, patterns in academic_patterns.items():
+            for pattern in patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                if matches:
+                    data['academic_metrics'][category] = matches[0]
+                    break
+        
+        for category, patterns in research_patterns.items():
+            for pattern in patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                if matches:
+                    data['research_metrics'][category] = matches[0]
+                    break
+        
+        # Extract numbers with context for other categories
+        self.extract_contextual_data_enhanced(text, data, filename)
+        
+        return data
+
+    def extract_contextual_data_enhanced(self, text: str, data: Dict, filename: str):
+        """Enhanced contextual data extraction"""
+        # Look for infrastructure metrics
+        infra_patterns = [
+            (r'library.*?(\d+(?:,\d+)*)\s*(?:volumes|books)', 'library_volumes', 'infrastructure_metrics'),
+            (r'campus.*?(\d+(?:\.\d+)?)\s*(?:acres|hectares)', 'campus_area', 'infrastructure_metrics'),
+            (r'laboratory.*?(\d+)', 'laboratories_count', 'infrastructure_metrics'),
+            (r'classroom.*?(\d+)', 'classrooms_count', 'infrastructure_metrics')
+        ]
+        
+        # Financial metrics
+        financial_patterns = [
+            (r'budget.*?[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)', 'annual_budget', 'financial_metrics'),
+            (r'grant.*?[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)', 'total_grants', 'financial_metrics'),
+            (r'revenue.*?[₹$]?\s*(\d+(?:,\d+)*(?:\.\d+)?)', 'annual_revenue', 'financial_metrics')
+        ]
+        
+        # Student metrics
+        student_patterns = [
+            (r'students.*?(\d+(?:,\d+)*)', 'total_students', 'student_metrics'),
+            (r'enrollment.*?(\d+(?:,\d+)*)', 'total_enrollment', 'student_metrics'),
+            (r'placement.*?(\d+(?:\.\d+)?)%', 'placement_rate', 'student_metrics')
+        ]
+        
+        all_patterns = infra_patterns + financial_patterns + student_patterns
+        
+        for pattern, key, category in all_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                data[category][key] = matches[0]
         
 class InstitutionalAIAnalyzer:
     def __init__(self):
@@ -311,21 +422,29 @@ class InstitutionalAIAnalyzer:
         self.performance_metrics = self.define_performance_metrics()
         self.document_requirements = self.define_document_requirements()
         
-        # Initialize RAG with error handling
-        try:
-            self.rag_extractor = RAGDataExtractor()
-            # Test the RAG system with a simple operation
-            if hasattr(self.rag_extractor, 'embedding_model'):
-                st.success("✅ RAG System initialized successfully")
-            else:
-                st.info("ℹ️ RAG System running in basic mode (without embeddings)")
-        except Exception as e:
-            st.error(f"❌ RAG System initialization failed: {e}")
-            # Create a basic RAG extractor without embeddings
-            self.rag_extractor = RAGDataExtractor()
-            self.rag_extractor.embedding_model = None
+        # Initialize RAG with progress indication
+        with st.spinner("🔄 Initializing AI Document Analysis System..."):
+            try:
+                # Show initialization status
+                if 'rag_initialized' not in st.session_state:
+                    st.session_state.rag_initialized = False
+            
+                if not st.session_state.rag_initialized:
+                    with st.spinner("🔄 Initializing AI Document Analysis System..."):
+                        self.rag_extractor = RAGDataExtractor()
+                        st.session_state.rag_initialized = True
+                    
+                        # Check what mode we're running in
+                        if hasattr(self.rag_extractor, 'embedding_model') and self.rag_extractor.embedding_model is not None:
+                            st.success("✅ AI Document Analysis System Ready (Full Features)")
+                        else:
+                            st.info("ℹ️ AI Document Analysis System Ready (Basic Features - Text Extraction & Pattern Matching)")
+            except Exception as e:
+                st.warning(f"⚠️ AI System using basic mode: {e}")
+                self.rag_extractor = RAGDataExtractor()
+                st.session_state.rag_initialized = True
         
-        self.create_dummy_institution_users()
+            self.create_dummy_institution_users()    
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
@@ -526,41 +645,48 @@ class InstitutionalAIAnalyzer:
         return hashlib.sha256(password.encode()).hexdigest()
 
     def analyze_documents_with_rag(self, institution_id: str, uploaded_files: List) -> Dict[str, Any]:
-        """Analyze uploaded documents using RAG and extract structured data"""
+        """Analyze uploaded documents using available analysis methods"""
         try:
-            # Check if we have files to process
             if not uploaded_files:
                 return self.get_default_analysis_result(uploaded_files)
-        
-            # Extract data using RAG
+            
+            # Show progress
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            status_text.text("📄 Starting document analysis...")
+            progress_bar.progress(10)
+            
+            # Extract data
             extracted_data = self.rag_extractor.extract_comprehensive_data(uploaded_files)
-    
-            # Ensure extracted_data has all required keys
-            if not extracted_data:
-                extracted_data = self.get_default_analysis_result(uploaded_files)
-    
-            # Save extracted data to database
+            progress_bar.progress(60)
+            
+            status_text.text("🤖 Generating AI insights...")
+            # Generate AI insights
+            ai_insights = self.generate_ai_insights(extracted_data)
+            progress_bar.progress(90)
+            
+            # Save to database
             cursor = self.conn.cursor()
             cursor.execute('''
                 INSERT INTO rag_analysis 
                 (institution_id, analysis_type, extracted_data, confidence_score)
                 VALUES (?, ?, ?, ?)
             ''', (institution_id, 'document_analysis', json.dumps(extracted_data), 0.85))
-    
             self.conn.commit()
-    
-            # Generate AI insights
-            ai_insights = self.generate_ai_insights(extracted_data)
-    
+            
+            progress_bar.progress(100)
+            status_text.text("✅ Analysis complete!")
+            
             return {
                 'extracted_data': extracted_data,
                 'ai_insights': ai_insights,
                 'confidence_score': 0.85,
                 'status': 'Analysis Complete'
             }
-    
+            
         except Exception as e:
-            st.error(f"Error in RAG analysis: {str(e)}")
+            st.error(f"Error in document analysis: {str(e)}")
             return self.get_default_analysis_result(uploaded_files)
 
     def get_default_analysis_result(self, uploaded_files: List) -> Dict[str, Any]:
