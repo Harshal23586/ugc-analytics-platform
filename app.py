@@ -1476,7 +1476,7 @@ def create_institution_dashboard(analyzer, user):
         
     st.header(f"🏛️ Institution Dashboard - {user.get('institution_name', 'Unknown')}")
     
-    # Display institution overview with safe access
+    # Display institution overview
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -1488,11 +1488,11 @@ def create_institution_dashboard(analyzer, user):
     with col4:
         st.metric("Role", user.get('role', 'N/A'))
     
-    # Navigation for institution users - UPDATED WITH CORRECT FUNCTION NAMES
+    # Navigation for institution users - CORRECTED TABS
     institution_tabs = st.tabs([
         "📤 Document Upload", 
-        "📝 Basic Data Submission", 
-        "🏛️ Systematic Data Form",  # NEW TAB
+        "📝 Basic Data Submission",  # This tab shows the basic form
+        "🏛️ Systematic Data Form",   # This tab shows the comprehensive form
         "📊 My Submissions",
         "📋 Requirements Guide",
         "🔄 Approval Workflow"
@@ -1501,8 +1501,11 @@ def create_institution_dashboard(analyzer, user):
     with institution_tabs[0]:
         create_institution_document_upload(analyzer, user)
     
-    with institution_tabs[2]:  # NEW TAB FOR SYSTEMATIC DATA FORM
-        create_systematic_data_submission_form(analyzer, user)
+    with institution_tabs[1]:
+        create_institution_data_submission(analyzer, user)  # This should show the basic form
+    
+    with institution_tabs[2]:
+        create_systematic_data_submission_form(analyzer, user)  # The new comprehensive form
     
     with institution_tabs[3]:
         create_institution_submissions_view(analyzer, user)
@@ -1512,6 +1515,222 @@ def create_institution_dashboard(analyzer, user):
     
     with institution_tabs[5]:
         create_institution_approval_workflow(analyzer, user)
+
+def create_institution_data_submission(analyzer, user):
+    st.subheader("📝 Basic Data Submission Form")
+    
+    st.info("Submit essential institutional data and performance metrics through this simplified form")
+    
+    with st.form("basic_institution_data_submission"):
+        st.write("### 🎓 Academic Performance Data")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            naac_grade = st.selectbox(
+                "NAAC Grade",
+                ["A++", "A+", "A", "B++", "B+", "B", "C", "Not Accredited"],
+                key="basic_naac_grade"
+            )
+            student_faculty_ratio = st.number_input(
+                "Student-Faculty Ratio",
+                min_value=5.0,
+                max_value=50.0,
+                value=20.0,
+                step=0.1,
+                key="basic_sf_ratio"
+            )
+            phd_faculty_ratio = st.number_input(
+                "PhD Faculty Ratio (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=60.0,
+                step=1.0,
+                key="basic_phd_ratio"
+            ) / 100
+        
+        with col2:
+            nirf_ranking = st.number_input(
+                "NIRF Ranking (if applicable)",
+                min_value=1,
+                max_value=200,
+                value=None,
+                placeholder="Leave blank if not ranked",
+                key="basic_nirf"
+            )
+            placement_rate = st.number_input(
+                "Placement Rate (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=75.0,
+                step=1.0,
+                key="basic_placement"
+            )
+        
+        st.write("### 🔬 Research & Infrastructure")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            research_publications = st.number_input(
+                "Research Publications (Last Year)",
+                min_value=0,
+                value=50,
+                key="basic_publications"
+            )
+            research_grants = st.number_input(
+                "Research Grants Amount (₹ Lakhs)",
+                min_value=0,
+                value=100,
+                step=10,
+                key="basic_grants"
+            )
+        
+        with col2:
+            digital_infrastructure_score = st.slider(
+                "Digital Infrastructure Score (1-10)",
+                min_value=1,
+                max_value=10,
+                value=7,
+                key="basic_digital"
+            )
+            library_volumes = st.number_input(
+                "Library Volumes (in thousands)",
+                min_value=0,
+                value=20,
+                key="basic_library"
+            )
+        
+        st.write("### ⚖️ Governance & Social Impact")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            financial_stability_score = st.slider(
+                "Financial Stability Score (1-10)",
+                min_value=1,
+                max_value=10,
+                value=8,
+                key="basic_financial"
+            )
+            community_projects = st.number_input(
+                "Community Projects (Last Year)",
+                min_value=0,
+                value=10,
+                key="basic_community"
+            )
+        
+        with col2:
+            compliance_score = st.slider(
+                "Compliance Score (1-10)",
+                min_value=1,
+                max_value=10,
+                value=8,
+                key="basic_compliance"
+            )
+            administrative_efficiency = st.slider(
+                "Administrative Efficiency (1-10)",
+                min_value=1,
+                max_value=10,
+                value=7,
+                key="basic_admin"
+            )
+        
+        # Additional quick metrics
+        st.write("### 📊 Quick Metrics")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_students = st.number_input(
+                "Total Students",
+                min_value=0,
+                value=1000,
+                step=100,
+                key="basic_students"
+            )
+        
+        with col2:
+            total_faculty = st.number_input(
+                "Total Faculty",
+                min_value=0,
+                value=50,
+                key="basic_faculty"
+            )
+        
+        with col3:
+            campus_area = st.number_input(
+                "Campus Area (Acres)",
+                min_value=0.0,
+                value=50.0,
+                step=1.0,
+                key="basic_campus"
+            )
+        
+        submission_notes = st.text_area(
+            "Additional Notes / Comments",
+            placeholder="Add any additional information or context for your submission...",
+            key="basic_notes"
+        )
+        
+        submitted = st.form_submit_button("📤 Submit Basic Data")
+        
+        if submitted:
+            submission_data = {
+                "academic_data": {
+                    "naac_grade": naac_grade,
+                    "nirf_ranking": nirf_ranking,
+                    "student_faculty_ratio": student_faculty_ratio,
+                    "phd_faculty_ratio": phd_faculty_ratio,
+                    "placement_rate": placement_rate
+                },
+                "research_data": {
+                    "research_publications": research_publications,
+                    "research_grants": research_grants,
+                    "digital_infrastructure_score": digital_infrastructure_score,
+                    "library_volumes": library_volumes
+                },
+                "governance_data": {
+                    "financial_stability_score": financial_stability_score,
+                    "compliance_score": compliance_score,
+                    "administrative_efficiency": administrative_efficiency,
+                    "community_projects": community_projects
+                },
+                "institutional_data": {
+                    "total_students": total_students,
+                    "total_faculty": total_faculty,
+                    "campus_area": campus_area
+                },
+                "submission_notes": submission_notes,
+                "submission_date": datetime.now().isoformat(),
+                "submission_type": "basic_institutional_data"
+            }
+            
+            analyzer.save_institution_submission(
+                user['institution_id'],
+                "basic_performance_data",
+                submission_data
+            )
+            
+            st.success("✅ Basic data submitted successfully! Your submission is under review.")
+            
+            # Show quick summary
+            st.subheader("📋 Submission Summary")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("NAAC Grade", naac_grade)
+                st.metric("Student-Faculty Ratio", f"{student_faculty_ratio}:1")
+            
+            with col2:
+                st.metric("Placement Rate", f"{placement_rate}%")
+                st.metric("Research Publications", research_publications)
+            
+            with col3:
+                st.metric("Digital Infrastructure", f"{digital_infrastructure_score}/10")
+                st.metric("Financial Stability", f"{financial_stability_score}/10")
+            
+            st.balloons()
 
 def create_institution_approval_workflow(analyzer, user):
     st.subheader("🔄 Institution Approval Workflow")
