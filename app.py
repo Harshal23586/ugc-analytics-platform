@@ -1,3 +1,4 @@
+# Keep only ONE copy of all imports
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,7 +10,7 @@ from sklearn.cluster import KMeans
 import warnings
 warnings.filterwarnings('ignore')
 
-# Additional imports for enhanced functionality
+# Additional imports
 from datetime import datetime, timedelta
 import json
 from typing import Dict, List, Tuple, Any, Optional
@@ -24,15 +25,11 @@ from pathlib import Path
 # RAG-specific imports
 import PyPDF2
 import docx
-import faiss
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-
-# Add these instead:
 import re
-from typing import List
 
-# Page configuration MUST be the first Streamlit command
+# PAGE CONFIG MUST BE FIRST STREAMLIT COMMAND
 st.set_page_config(
     page_title="AI-Powered Institutional Approval System - UGC/AICTE",
     page_icon="🏛️",
@@ -40,7 +37,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# THEN initialize session state
+# Then session state
 if 'session_initialized' not in st.session_state:
     st.session_state.session_initialized = True
     st.session_state.institution_user = None
@@ -48,7 +45,7 @@ if 'session_initialized' not in st.session_state:
     st.session_state.rag_analysis = None
     st.session_state.selected_institution = None
 
-# THEN your custom CSS
+# Then CSS
 st.markdown("""
 <style>
     .main-header {
