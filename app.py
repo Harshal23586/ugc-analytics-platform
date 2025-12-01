@@ -819,7 +819,7 @@ class InstitutionalAIAnalyzer:
             pass
         
         # Generate sample data if database is empty
-        sample_data = self.generate_comprehensive_historical_data()
+        sample_data = self.generate_comprehensive_dummy_data()
         sample_data.to_sql('institutions', self.conn, if_exists='replace', index=False)
         return sample_data
     
@@ -992,127 +992,7 @@ class InstitutionalAIAnalyzer:
             WHERE institution_id = ? 
             ORDER BY submitted_date DESC
         ''', self.conn, params=(institution_id,))
-    
-    def generate_comprehensive_historical_data(self) -> pd.DataFrame:
-        """Generate comprehensive historical data for institutions"""
-        np.random.seed(42)
-        n_institutions = 200
-        years_of_data = 5
-        
-        institutions_data = []
-        
-        for inst_id in range(1, n_institutions + 1):
-            base_quality = np.random.uniform(0.3, 0.9)
-            
-            for year_offset in range(years_of_data):
-                year = 2023 - year_offset
-                inst_trend = base_quality + (year_offset * 0.02)
-                
-                # Generate realistic data with proper distributions
-                naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
-                naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
-                naac_grade = np.random.choice(naac_grades, p=naac_probs)
-                
-                # FIXED: Ensure probability array matches choices array size
-                nirf_choices = list(range(1, 201)) + [None] * 50
-                nirf_probs = [0.005] * 200 + [0.01] * 50  # 200 ranks + 50 None values
-                # Normalize probabilities to sum to 1
-                nirf_probs = [p / sum(nirf_probs) for p in nirf_probs]
-                nirf_rank = np.random.choice(nirf_choices, p=nirf_probs)
-                
-                student_faculty_ratio = max(10, np.random.normal(20, 5))
-                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3  # Beta distribution for ratios
-                
-                # Research metrics with realistic distributions
-                publications = max(0, int(np.random.poisson(inst_trend * 30)))
-                research_grants = max(0, int(np.random.exponential(inst_trend * 500000)))
-                patents = np.random.poisson(inst_trend * 3)
-                
-                # Infrastructure scores
-                digital_infrastructure_score = max(1, min(10, np.random.normal(7, 1.5)))
-                library_volumes = max(1000, int(np.random.normal(20000, 10000)))
-                
-                # Governance scores
-                financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
-                compliance_score = max(1, min(10, np.random.normal(8, 1)))
-                
-                # Student development
-                placement_rate = max(40, min(98, np.random.normal(75, 10)))
-                higher_education_rate = max(5, min(50, np.random.normal(20, 8)))
-                
-                # Social impact
-                community_projects = np.random.poisson(inst_trend * 8)
-                
-                # Calculate performance score
-                faculty_count = max(1, np.random.randint(30, 150))
-                performance_score = self.calculate_performance_score({
-                    'naac_grade': naac_grade,
-                    'nirf_ranking': nirf_rank,
-                    'student_faculty_ratio': student_faculty_ratio,
-                    'phd_faculty_ratio': phd_faculty_ratio,
-                    'publications_per_faculty': publications / faculty_count,
-                    'research_grants': research_grants,
-                    'digital_infrastructure': digital_infrastructure_score,
-                    'financial_stability': financial_stability,
-                    'placement_rate': placement_rate,
-                    'community_engagement': community_projects
-                })
-                
-                institution_data = {
-                    'institution_id': f'INST_{inst_id:04d}',
-                    'institution_name': f'University/College {inst_id:03d}',
-                    'year': year,
-                    'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College'], p=[0.3, 0.2, 0.3, 0.2]),
-                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat'], p=[0.2, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]),
-                    'established_year': np.random.randint(1950, 2015),
-                    
-                    # Academic Metrics
-                    'naac_grade': naac_grade,
-                    'nirf_ranking': nirf_rank,
-                    'student_faculty_ratio': round(student_faculty_ratio, 1),
-                    'phd_faculty_ratio': round(phd_faculty_ratio, 3),
-                    
-                    # Research Metrics
-                    'research_publications': publications,
-                    'research_grants_amount': research_grants,
-                    'patents_filed': patents,
-                    'industry_collaborations': np.random.poisson(inst_trend * 6),
-                    
-                    # Infrastructure Metrics
-                    'digital_infrastructure_score': round(digital_infrastructure_score, 1),
-                    'library_volumes': library_volumes,
-                    'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
-                    
-                    # Governance Metrics
-                    'financial_stability_score': round(financial_stability, 1),
-                    'compliance_score': round(compliance_score, 1),
-                    'administrative_efficiency': round(max(1, min(10, np.random.normal(7.2, 1.1))), 1),
-                    
-                    # Student Development Metrics
-                    'placement_rate': round(placement_rate, 1),
-                    'higher_education_rate': round(higher_education_rate, 1),
-                    'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
-                    
-                    # Social Impact Metrics
-                    'community_projects': community_projects,
-                    'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
-                    'inclusive_education_index': round(max(1, min(10, np.random.normal(7.5, 1.2))), 1),
-                    
-                    # Government Schemes Participation
-                    'rusa_participation': np.random.choice([0, 1], p=[0.4, 0.6]),
-                    'nmeict_participation': np.random.choice([0, 1], p=[0.5, 0.5]),
-                    'fist_participation': np.random.choice([0, 1], p=[0.6, 0.4]),
-                    'dst_participation': np.random.choice([0, 1], p=[0.7, 0.3]),
-                    
-                    # Overall Performance
-                    'performance_score': round(performance_score, 2),
-                    'approval_recommendation': self.generate_approval_recommendation(performance_score),
-                    'risk_level': self.assess_risk_level(performance_score)
-                }
-                
-                institutions_data.append(institution_data)
-        
-        return pd.DataFrame(institutions_data)
+
     
     def calculate_performance_score(self, metrics: Dict) -> float:
         """Calculate overall performance score based on weighted metrics"""
