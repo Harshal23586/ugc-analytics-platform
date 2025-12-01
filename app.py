@@ -4270,43 +4270,8 @@ def create_data_management_module(analyzer):
     
     tab1, tab2, tab3 = st.tabs(["📤 Upload New Data", "🔍 View Current Data", "⚙️ Database Management"])
     
-    with tab1:
-        st.subheader("Upload Institutional Data")
-        
-        uploaded_file = st.file_uploader("Upload CSV file with institutional data", type=['csv'])
-        
-        if uploaded_file is not None:
-            try:
-                new_data = pd.read_csv(uploaded_file)
-                st.success(f"✅ Successfully loaded {len(new_data)} records")
-                
-                # Show preview
-                st.subheader("Data Preview")
-                st.dataframe(new_data.head())
-                
-                # Data validation
-                required_columns = ['institution_id', 'institution_name', 'year', 'institution_type']
-                missing_columns = [col for col in required_columns if col not in new_data.columns]
-                
-                if missing_columns:
-                    st.error(f"❌ Missing required columns: {missing_columns}")
-                else:
-                    st.success("✅ All required columns present")
-                    
-                    if st.button("💾 Save to Database"):
-                        try:
-                            new_data.to_sql('institutions', analyzer.conn, if_exists='append', index=False)
-                            st.success("✅ Data successfully saved to database!")
-                            # Refresh the data
-                            analyzer.historical_data = analyzer.load_or_generate_data()
-                        except Exception as e:
-                            st.error(f"❌ Error saving to database: {str(e)}")
-                            
-            except Exception as e:
-                st.error(f"❌ Error reading file: {str(e)}")
-    
     with tab2:
-        st.subheader("Current Database Contents")
+        st.subheader("📊 Current Database Analytics")
         
         # Use the actual data from analyzer
         current_data = analyzer.historical_data
@@ -4318,87 +4283,335 @@ def create_data_management_module(analyzer):
         with col1:
             total_records = len(current_data)
             expected_records = 200  # 20 institutions × 10 years
-            status = "✅ PASS" if total_records == expected_records else "❌ FAIL"
-            st.metric("Total Records", f"{total_records}", delta=f"Expected: {expected_records}")
+            if total_records == expected_records:
+                st.success(f"📊 **Total Records**: {total_records} ✅")
+            else:
+                st.error(f"📊 **Total Records**: {total_records} (Expected: {expected_records})")
         
         with col2:
             unique_institutions = current_data['institution_id'].nunique()
             expected_institutions = 20
-            status = "✅ PASS" if unique_institutions == expected_institutions else "❌ FAIL"
-            st.metric("Unique Institutions", f"{unique_institutions}", delta=f"Expected: {expected_institutions}")
+            if unique_institutions == expected_institutions:
+                st.success(f"🏛️ **Unique Institutions**: {unique_institutions} ✅")
+            else:
+                st.error(f"🏛️ **Unique Institutions**: {unique_institutions} (Expected: {expected_institutions})")
         
         with col3:
             years_covered = current_data['year'].nunique()
             expected_years = 10
-            status = "✅ PASS" if years_covered == expected_years else "❌ FAIL"
-            st.metric("Years Covered", f"{years_covered}", delta=f"Expected: {expected_years}")
+            if years_covered == expected_years:
+                st.success(f"📅 **Years Covered**: {years_covered} ✅")
+            else:
+                st.error(f"📅 **Years Covered**: {years_covered} (Expected: {expected_years})")
         
         with col4:
             year_range = f"{current_data['year'].min()}-{current_data['year'].max()}"
             expected_range = "2014-2023"
-            status = "✅ PASS" if year_range == expected_range else "❌ FAIL"
-            st.metric("Year Range", year_range, delta=f"Expected: {expected_range}")
+            if year_range == expected_range:
+                st.success(f"🗓️ **Year Range**: {year_range} ✅")
+            else:
+                st.error(f"🗓️ **Year Range**: {year_range} (Expected: {expected_range})")
         
         # Show current year overview
         current_year_data = current_data[current_data['year'] == 2023]
         
-        st.subheader("📊 2023 Institutional Overview")
+        st.markdown("---")
+        
+        # Quick Analytics Cards - NEW SECTION
+        st.subheader("📈 Quick Analytics Dashboard")
+        
+        # Row 1: Performance Metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            avg_performance = current_year_data['performance_score'].mean()
+            # Color code based on performance
+            if avg_performance >= 8.0:
+                color = "🟢"
+            elif avg_performance >= 6.0:
+                color = "🟡"
+            else:
+                color = "🔴"
+            st.metric(f"{color} Avg Performance Score", f"{avg_performance:.2f}/10")
+        
+        with col2:
+            high_performers = len(current_year_data[current_year_data['performance_score'] >= 8.0])
+            st.metric("🏆 High Performers (8+ Score)", high_performers)
+        
+        with col3:
+            avg_placement = current_year_data['placement_rate'].mean()
+            st.metric("🎓 Avg Placement Rate", f"{avg_placement:.1f}%")
+        
+        with col4:
+            low_risk_count = len(current_year_data[current_year_data['risk_level'] == 'Low Risk'])
+            st.metric("🛡️ Low Risk Institutions", low_risk_count)
+        
+        # Row 2: Data Quality Metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            naac_rated = current_year_data['naac_grade'].notna().sum()
+            st.metric("🏅 NAAC Rated Institutions", f"{naac_rated}/{len(current_year_data)}")
+        
+        with col2:
+            nirf_ranked = current_year_data['nirf_ranking'].notna().sum()
+            st.metric("📊 NIRF Ranked Institutions", f"{nirf_ranked}/{len(current_year_data)}")
+        
+        with col3:
+            research_active = current_year_data[current_year_data['research_publications'] > 20].shape[0]
+            st.metric("🔬 Research Active (>20 pubs)", f"{research_active}/{len(current_year_data)}")
+        
+        with col4:
+            data_completeness = round((current_year_data.count().mean() / len(current_year_data.columns)) * 100, 1)
+            st.metric("📋 Data Completeness", f"{data_completeness}%")
+        
+        # Search and Filter Section - NEW
+        st.markdown("---")
+        st.subheader("🔍 Search & Filter Institutions")
+        
+        search_col1, search_col2, search_col3, search_col4 = st.columns(4)
+        
+        with search_col1:
+            search_text = st.text_input("🔎 Search by Name/ID", "", 
+                                       placeholder="Type institution name or ID...")
+        
+        with search_col2:
+            institution_types = ["All"] + sorted(current_year_data['institution_type'].unique().tolist())
+            selected_type = st.selectbox("🏛️ Filter by Type", institution_types)
+        
+        with search_col3:
+            performance_range = st.slider("📈 Performance Score Range", 
+                                         min_value=0.0, max_value=10.0, 
+                                         value=(0.0, 10.0), step=0.5)
+        
+        with search_col4:
+            risk_levels = ["All"] + sorted(current_year_data['risk_level'].unique().tolist())
+            selected_risk = st.selectbox("⚠️ Filter by Risk", risk_levels)
+        
+        # Apply filters
+        filtered_data = current_year_data.copy()
+        
+        if search_text:
+            mask = (filtered_data['institution_name'].str.contains(search_text, case=False)) | \
+                   (filtered_data['institution_id'].str.contains(search_text, case=False))
+            filtered_data = filtered_data[mask]
+        
+        if selected_type != "All":
+            filtered_data = filtered_data[filtered_data['institution_type'] == selected_type]
+        
+        if selected_risk != "All":
+            filtered_data = filtered_data[filtered_data['risk_level'] == selected_risk]
+        
+        filtered_data = filtered_data[
+            (filtered_data['performance_score'] >= performance_range[0]) & 
+            (filtered_data['performance_score'] <= performance_range[1])
+        ]
+        
+        # Display filter summary
+        st.info(f"**Showing {len(filtered_data)} of {len(current_year_data)} institutions**")
+        
+        # Action Buttons Row - NEW
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("📥 Export to CSV", type="secondary"):
+                csv = filtered_data.to_csv(index=False)
+                st.download_button(
+                    label="⬇️ Download CSV",
+                    data=csv,
+                    file_name="institutions_data.csv",
+                    mime="text/csv"
+                )
+        
+        with col2:
+            if st.button("📊 Compare Selected", type="secondary"):
+                st.session_state.selected_for_comparison = []
+                st.info("Select institutions from table below for comparison")
+        
+        with col3:
+            if st.button("🔄 Refresh Data", type="secondary"):
+                st.rerun()
+        
+        with col4:
+            if st.button("📋 Generate Summary Report", type="secondary"):
+                generate_data_summary(filtered_data)
+        
+        # Data preview with enhanced UI - UPDATED
+        st.markdown("---")
+        st.subheader("📋 Data Preview (Current Year - 20 Institutions)")
+        
+        # Prepare display columns with sorting options
+        display_columns = ['institution_id', 'institution_name', 'institution_type', 'state', 
+                          'performance_score', 'naac_grade', 'placement_rate', 'risk_level']
+        
+        # Create a copy for display with formatted values
+        display_data = filtered_data[display_columns].copy()
+        
+        # Add color formatting function
+        def color_performance(val):
+            if val >= 8.0:
+                color = '#d4edda'  # Light green
+            elif val >= 6.0:
+                color = '#fff3cd'  # Light yellow
+            else:
+                color = '#f8d7da'  # Light red
+            return f'background-color: {color}'
+        
+        def color_risk(val):
+            if val == 'Low Risk':
+                color = '#d4edda'
+            elif val == 'Medium Risk':
+                color = '#fff3cd'
+            elif val == 'High Risk':
+                color = '#f8d7da'
+            else:
+                color = '#dc3545'  # Red for critical
+            return f'background-color: {color}'
+        
+        def color_naac(val):
+            if val in ['A++', 'A+', 'A']:
+                color = '#d4edda'
+            elif val in ['B++', 'B+']:
+                color = '#fff3cd'
+            else:
+                color = '#f8d7da'
+            return f'background-color: {color}'
+        
+        # Apply styling
+        styled_data = display_data.style.applymap(color_performance, subset=['performance_score']) \
+                                       .applymap(color_risk, subset=['risk_level']) \
+                                       .applymap(color_naac, subset=['naac_grade']) \
+                                       .format({
+                                           'performance_score': '{:.2f}',
+                                           'placement_rate': '{:.1f}%'
+                                       })
+        
+        # Display the styled dataframe
+        st.dataframe(
+            styled_data,
+            use_container_width=True,
+            height=500
+        )
+        
+        # Sorting options
+        st.caption("💡 *Tip: Click column headers to sort. Green=High performance, Yellow=Medium, Red=Low*")
+        
+        # Quick Actions for Selected Institution - NEW
+        if 'selected_institution_id' in st.session_state:
+            st.markdown("---")
+            st.subheader(f"⚡ Quick Actions for {st.session_state.selected_institution_id}")
+            
+            selected_data = current_year_data[current_year_data['institution_id'] == st.session_state.selected_institution_id]
+            
+            if not selected_data.empty:
+                row = selected_data.iloc[0]
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("Current Performance", f"{row['performance_score']:.2f}")
+                    st.metric("Placement Rate", f"{row['placement_rate']:.1f}%")
+                
+                with col2:
+                    st.metric("Risk Level", row['risk_level'])
+                    st.metric("NAAC Grade", row['naac_grade'])
+                
+                with col3:
+                    if st.button("📈 View Details", type="primary"):
+                        st.session_state.view_institution = row['institution_id']
+                        st.rerun()
+                    
+                    if st.button("📤 Upload Documents", type="secondary"):
+                        st.session_state.upload_for_institution = row['institution_id']
+                        st.rerun()
+        
+        # Data Quality Indicators - NEW
+        st.markdown("---")
+        st.subheader("📊 Data Quality Overview")
+        
+        # Calculate completeness for each institution
+        completeness_data = []
+        for _, row in current_year_data.iterrows():
+            non_null_count = row.count()
+            total_fields = len(row)
+            completeness = (non_null_count / total_fields) * 100
+            
+            completeness_data.append({
+                'Institution': row['institution_name'],
+                'ID': row['institution_id'],
+                'Completeness %': completeness,
+                'Performance': row['performance_score']
+            })
+        
+        completeness_df = pd.DataFrame(completeness_data)
+        
+        # Create visualization
+        fig = px.bar(completeness_df.sort_values('Completeness %', ascending=False).head(10),
+                    x='Institution', y='Completeness %',
+                    color='Performance',
+                    color_continuous_scale='RdYlGn',
+                    title="Top 10 Institutions by Data Completeness",
+                    labels={'Completeness %': 'Data Completeness (%)'})
+        
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Show missing data summary
+        missing_summary = current_year_data.isnull().sum()
+        missing_data = missing_summary[missing_summary > 0]
+        
+        if len(missing_data) > 0:
+            st.warning(f"⚠️ **Missing Data Alert**: {len(missing_data)} fields have incomplete data")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Fields with Missing Data:**")
+                for field, count in missing_data.items():
+                    st.write(f"- {field}: {count} missing")
+            
+            with col2:
+                st.write("**Recommendations:**")
+                st.write("1. Run data validation check")
+                st.write("2. Contact institutions for missing data")
+                st.write("3. Use AI to estimate missing values")
+                
+def generate_data_summary(data):
+    """Generate and display data summary"""
+    with st.expander("📄 Data Summary Report", expanded=True):
+        st.write("### 📊 Summary Statistics")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            avg_performance = current_year_data['performance_score'].mean()
-            st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
+            st.metric("Total Institutions", len(data))
+            st.metric("Avg Performance", f"{data['performance_score'].mean():.2f}")
         
         with col2:
-            high_performers = len(current_year_data[current_year_data['performance_score'] >= 8.0])
-            st.metric("High Performers (8+ Score)", high_performers)
+            st.metric("Avg Placement Rate", f"{data['placement_rate'].mean():.1f}%")
+            st.metric("Research Active", f"{len(data[data['research_publications'] > 20])}/{len(data)}")
         
         with col3:
-            avg_placement = current_year_data['placement_rate'].mean()
-            st.metric("Avg Placement Rate", f"{avg_placement:.1f}%")
+            st.metric("NAAC A/A+ Rated", f"{len(data[data['naac_grade'].isin(['A', 'A+', 'A++'])]):.0f}")
+            st.metric("Low Risk Institutions", f"{len(data[data['risk_level'] == 'Low Risk']):.0f}")
         
-        # Data preview
-        st.subheader("📋 Data Preview (Current Year - 20 Institutions)")
+        # Performance distribution
+        st.write("### 📈 Performance Distribution")
+        fig = px.histogram(data, x='performance_score', nbins=10, 
+                          title="Distribution of Performance Scores")
+        st.plotly_chart(fig, use_container_width=True)
         
-        display_columns = ['institution_id', 'institution_name', 'institution_type', 'state', 
-                          'performance_score', 'naac_grade', 'placement_rate', 'risk_level']
+        # Top performers
+        st.write("### 🏆 Top 5 Performing Institutions")
+        top_performers = data.nlargest(5, 'performance_score')[['institution_name', 'performance_score', 'risk_level']]
+        st.dataframe(top_performers, use_container_width=True)
         
-        st.dataframe(
-            current_year_data[display_columns].sort_values('performance_score', ascending=False),
-            use_container_width=True,
-            height=400
+        # Export option
+        st.download_button(
+            label="📥 Download Summary Report",
+            data=data.to_csv(index=False),
+            file_name="institution_summary.csv",
+            mime="text/csv"
         )
-    
-    with tab3:
-        st.subheader("Database Management")
-        
-        st.info("**Current Specification**: 20 Institutions × 10 Years (2014-2023) = 200 Total Records")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🔄 Regenerate 20×10 Data", help="Create fresh data with 20 institutions and 10 years"):
-                new_data = generate_comprehensive_dummy_data()
-                try:
-                    new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
-                    analyzer.historical_data = new_data
-                    st.success("✅ New 20×10 sample data generated successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error generating data: {e}")
-        
-        with col2:
-            if st.button("🗑️ Clear All Data", help="Remove all data from the database"):
-                try:
-                    cursor = analyzer.conn.cursor()
-                    cursor.execute('DELETE FROM institutions')
-                    analyzer.conn.commit()
-                    analyzer.historical_data = pd.DataFrame()
-                    st.success("✅ All data cleared successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error clearing data: {e}")
 
 def generate_comprehensive_dummy_data():
     """Generate comprehensive dummy data matching both Basic and Systematic form parameters"""
