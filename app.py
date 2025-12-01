@@ -659,7 +659,6 @@ class InstitutionalAIAnalyzer:
         self.historical_data = self.load_or_generate_data()
         self.performance_metrics = self.define_performance_metrics()
         self.document_requirements = self.define_document_requirements()
-        self.report_generator = PDFReportGenerator(self)
         
         # Initialize RAG with progress indication
         with st.spinner("🔄 Initializing AI Document Analysis System..."):
