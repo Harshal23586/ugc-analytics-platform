@@ -9,7 +9,6 @@ from sklearn.cluster import KMeans
 import warnings
 warnings.filterwarnings('ignore')
 # Add to imports at the top of your main file:
-from report_generator import PDFReportGenerator
 
 # Additional imports for enhanced functionality
 from datetime import datetime, timedelta
