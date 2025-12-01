@@ -43,6 +43,227 @@ if 'session_initialized' not in st.session_state:
     st.session_state.rag_analysis = None
     st.session_state.selected_institution = None
 
+def create_api_documentation():
+    """Create API documentation and testing interface"""
+    st.header("🌐 API Integration Portal")
+    
+    st.info("""
+    **RESTful API for UGC/AICTE Institutional Analytics Platform**
+    
+    This API allows external systems, hackathon participants, and institutions to:
+    - Access institutional performance data
+    - Run AI-powered analytics
+    - Get configuration parameters
+    - Export data in multiple formats
+    """)
+    
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📖 API Documentation", 
+        "🔑 API Keys", 
+        "🧪 API Testing",
+        "📊 Quick Integration"
+    ])
+    
+    with tab1:
+        st.subheader("API Endpoints Overview")
+        
+        endpoints = [
+            {
+                "endpoint": "GET /institutions",
+                "description": "Get list of institutions",
+                "parameters": "year, institution_type, state, limit"
+            },
+            {
+                "endpoint": "GET /institutions/{id}",
+                "description": "Get institution performance data",
+                "parameters": "start_year, end_year"
+            },
+            {
+                "endpoint": "GET /performance/ranking",
+                "description": "Get performance ranking",
+                "parameters": "year, institution_type, limit"
+            },
+            {
+                "endpoint": "POST /analysis/run",
+                "description": "Run AI analysis",
+                "parameters": "institution_id, analysis_type"
+            },
+            {
+                "endpoint": "GET /metrics",
+                "description": "Get performance metrics configuration",
+                "parameters": "None"
+            },
+            {
+                "endpoint": "GET /documents",
+                "description": "Get document requirements",
+                "parameters": "approval_type"
+            },
+            {
+                "endpoint": "GET /export/institutions",
+                "description": "Export data",
+                "parameters": "format, year"
+            }
+        ]
+        
+        for endpoint in endpoints:
+            with st.expander(f"🌐 {endpoint['endpoint']}"):
+                st.write(f"**Description:** {endpoint['description']}")
+                st.write(f"**Parameters:** {endpoint['parameters']}")
+                
+                # Show example request
+                st.code(f"""
+# Python Example
+import requests
+
+api_key = "your_api_key_here"
+headers = {{"Authorization": f"Bearer {{{{api_key}}}}"}}
+
+# For {endpoint['endpoint']}
+response = requests.get(
+    "http://localhost:8000{endpoint['endpoint'].replace('{id}', 'INST_0001')}",
+    headers=headers,
+    params={{"year": 2023}}
+)
+
+print(response.json())
+                """, language="python")
+    
+    with tab2:
+        st.subheader("🔑 API Access Keys")
+        
+        st.warning("⚠️ These keys are for demonstration. Use secure keys in production.")
+        
+        api_keys = {
+            "ugc_admin": "ugc_api_key_2024_secure",
+            "aictel_team": "aictel_api_2024_secure", 
+            "hackathon_2024": "smart_india_hackathon_key",
+            "institution_api": "institution_access_2024"
+        }
+        
+        for role, key in api_keys.items():
+            col1, col2 = st.columns([2, 3])
+            with col1:
+                st.write(f"**{role.replace('_', ' ').title()}**")
+            with col2:
+                st.code(key, language="text")
+        
+        st.info("""
+        **Usage:**
+        ```python
+        headers = {
+            "Authorization": "Bearer your_api_key_here"
+        }
+        ```
+        """)
+    
+    with tab3:
+        st.subheader("🧪 API Testing Interface")
+        
+        # Quick test interface
+        endpoint = st.selectbox("Select Endpoint", [
+            "/institutions",
+            "/institutions/INST_0001", 
+            "/performance/ranking",
+            "/metrics",
+            "/documents"
+        ])
+        
+        api_key = st.selectbox("Select API Key", list(api_keys.keys()))
+        
+        if st.button("🚀 Test API Endpoint"):
+            with st.spinner("Testing API endpoint..."):
+                # Simulate API call
+                st.success("✅ API Test Successful!")
+                
+                # Show expected response structure
+                if "/institutions" in endpoint and "INST" not in endpoint:
+                    st.json({
+                        "institutions": [
+                            {
+                                "institution_id": "INST_0001",
+                                "institution_name": "University 001",
+                                "institution_type": "State University",
+                                "state": "Maharashtra",
+                                "year": 2023
+                            }
+                        ]
+                    })
+                elif "/institutions/INST" in endpoint:
+                    st.json({
+                        "institution_id": "INST_0001",
+                        "institution_name": "University 001",
+                        "performance_score": 8.5,
+                        "risk_level": "Low Risk",
+                        "approval_recommendation": "Full Approval - 5 Years"
+                    })
+    
+    with tab4:
+        st.subheader("📊 Quick Integration Guide")
+        
+        st.download_button(
+            label="📥 Download Python SDK",
+            data="""
+# UGC/AICTE API Python Client
+import requests
+
+class UGCAnalyticsAPI:
+    def __init__(self, api_key, base_url="http://localhost:8000"):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.headers = {"Authorization": f"Bearer {api_key}"}
+    
+    def get_institutions(self, year=None, institution_type=None):
+        params = {}
+        if year: params['year'] = year
+        if institution_type: params['institution_type'] = institution_type
+        
+        response = requests.get(
+            f"{self.base_url}/institutions",
+            headers=self.headers,
+            params=params
+        )
+        return response.json()
+    
+    def get_performance(self, institution_id):
+        response = requests.get(
+            f"{self.base_url}/institutions/{institution_id}",
+            headers=self.headers
+        )
+        return response.json()
+    
+    def run_analysis(self, institution_id, analysis_type="comprehensive"):
+        data = {
+            "institution_id": institution_id,
+            "analysis_type": analysis_type
+        }
+        response = requests.post(
+            f"{self.base_url}/analysis/run",
+            headers=self.headers,
+            json=data
+        )
+        return response.json()
+
+# Usage
+api = UGCAnalyticsAPI(api_key="your_api_key")
+institutions = api.get_institutions(year=2023)
+            """,
+            file_name="ugc_api_client.py"
+        )
+        
+        st.write("**Quick Start Commands:**")
+        st.code("""
+# Start API Server
+python api_endpoints.py
+
+# Install dependencies
+pip install fastapi uvicorn sqlalchemy
+
+# Test API
+curl -X GET "http://localhost:8000/institutions" \\
+     -H "Authorization: Bearer smart_india_hackathon_key"
+        """, language="bash")
+
+
 # Also update the RAGDocument class initialization
 class RAGDocument:
     def __init__(self, page_content: str, metadata: dict = None):
@@ -7097,6 +7318,11 @@ def main():
     
     elif app_mode == "⚙️ System Settings":
         create_system_settings(analyzer)
+
+    # Add to your main navigation in main() function:
+    elif app_mode == "🌐 API Integration":
+        create_api_documentation()
+   
         
         st.subheader("System Information")
         col1, col2, col3 = st.columns(3)
