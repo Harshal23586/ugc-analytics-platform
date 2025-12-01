@@ -4574,7 +4574,8 @@ def create_data_management_module(analyzer):
                 st.write("1. Run data validation check")
                 st.write("2. Contact institutions for missing data")
                 st.write("3. Use AI to estimate missing values")
-                
+
+
 def generate_data_summary(data):
     """Generate and display data summary"""
     with st.expander("📄 Data Summary Report", expanded=True):
