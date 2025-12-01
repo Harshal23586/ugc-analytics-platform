@@ -347,11 +347,26 @@ class SimpleVectorStore:
 
 # Page configuration
 st.set_page_config(
-    page_title="AI-Powered Institutional Approval System - UGC/AICTE",
-    page_icon="🏛️",
+    page_title="SUGAM - Smart University Governance and Approval Management",
+    page_icon="logo.ico",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# Create header with logo and title
+col1, col2 = st.columns([1, 4])
+with col1:
+    # Display logo (make sure logo.jpg is in the same directory as your app.py)
+    try:
+        st.image("logo.jpg", width=100)
+    except FileNotFoundError:
+        st.warning("Logo file not found. Please ensure logo.jpg is in the root directory.")
+        
+with col2:
+    st.title("सुगम")
+    st.subheader("SUGAM - Smart University Governance and Approval Management")
+
+# Add a separator
+st.markdown("---")
 
 class RAGDataExtractor:
     def __init__(self):
