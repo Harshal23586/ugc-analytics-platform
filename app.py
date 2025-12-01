@@ -4718,6 +4718,265 @@ def create_data_management_module(analyzer):
             st.write(f"- Consistency Score: {db_info['consistency_score']}/10")
             st.write(f"- Recommended Action: {db_info['recommended_action']}")
 
+def fix_data_inconsistencies(analyzer):
+    """Automatically fix data inconsistencies"""
+    with st.spinner("Fixing data inconsistencies..."):
+        fixed_data = analyzer.historical_data.copy()
+        
+        issues_fixed = 0
+        
+        # Fix 1: Ensure risk level matches performance score
+        for idx, row in fixed_data.iterrows():
+            score = row['performance_score']
+            current_risk = row['risk_level']
+            
+            if score >= 8.0 and current_risk != 'Low Risk':
+                fixed_data.at[idx, 'risk_level'] = 'Low Risk'
+                issues_fixed += 1
+            elif 6.5 <= score < 8.0 and current_risk != 'Medium Risk':
+                fixed_data.at[idx, 'risk_level'] = 'Medium Risk'
+                issues_fixed += 1
+            elif score < 6.5 and current_risk not in ['High Risk', 'Critical Risk']:
+                fixed_data.at[idx, 'risk_level'] = 'High Risk'
+                issues_fixed += 1
+        
+        # Fix 2: Ensure placement rate is within 0-100
+        if 'placement_rate' in fixed_data.columns:
+            invalid_placement = fixed_data[
+                (fixed_data['placement_rate'] < 0) | (fixed_data['placement_rate'] > 100)
+            ].shape[0]
+            
+            if invalid_placement > 0:
+                fixed_data['placement_rate'] = fixed_data['placement_rate'].clip(0, 100)
+                issues_fixed += invalid_placement
+        
+        # Save fixes
+        if issues_fixed > 0:
+            fixed_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+            analyzer.historical_data = fixed_data
+            st.success(f"✅ Fixed {issues_fixed} data inconsistencies")
+        else:
+            st.info("✅ No inconsistencies found")
+
+def recalculate_all_metrics(analyzer):
+    """Recalculate all derived metrics"""
+    with st.spinner("Recalculating all metrics..."):
+        updated_data = analyzer.historical_data.copy()
+        
+        for idx, row in updated_data.iterrows():
+            # Recalculate performance score
+            new_score = calculate_performance_score(row)
+            updated_data.at[idx, 'performance_score'] = new_score
+            
+            # Update dependent fields
+            updated_data.at[idx, 'approval_recommendation'] = generate_approval_recommendation(new_score)
+            updated_data.at[idx, 'risk_level'] = assess_risk_level(new_score)
+        
+        # Save to database
+        updated_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+        analyzer.historical_data = updated_data
+        
+        st.success(f"✅ Recalculated metrics for {len(updated_data)} records")
+
+def optimize_database(analyzer):
+    """Optimize database performance"""
+    with st.spinner("Optimizing database..."):
+        cursor = analyzer.conn.cursor()
+        
+        # Vacuum to defragment
+        cursor.execute("VACUUM")
+        
+        # Analyze for query optimization
+        cursor.execute("ANALYZE")
+        
+        # Reindex
+        cursor.execute("REINDEX")
+        
+        analyzer.conn.commit()
+        
+        st.success("✅ Database optimization complete!")
+
+def execute_selective_operation(analyzer, selected_institutions, selected_years, operation):
+    """Execute selective database operations"""
+    with st.spinner(f"Executing {operation}..."):
+        current_data = analyzer.historical_data
+        
+        # Apply filters
+        filtered_data = current_data.copy()
+        
+        if selected_institutions and "All Institutions" not in selected_institutions:
+            filtered_data = filtered_data[filtered_data['institution_id'].isin(selected_institutions)]
+        
+        if selected_years and "All Years" not in selected_years:
+            filtered_data = filtered_data[filtered_data['year'].isin(selected_years)]
+        
+        if operation == "Export Selected":
+            csv_data = filtered_data.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Selected Data",
+                data=csv_data,
+                file_name=f"selected_data_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+        
+        elif operation == "Update Selected":
+            st.info(f"Would update {len(filtered_data)} records")
+            # Show update form here
+        
+        elif operation == "Validate Selected":
+            validation_results = run_data_validation_on_subset(filtered_data)
+            st.write(validation_results)
+        
+        elif operation == "Delete Selected":
+            if st.checkbox(f"⚠️ Confirm deletion of {len(filtered_data)} records"):
+                # Delete from database
+                cursor = analyzer.conn.cursor()
+                for _, row in filtered_data.iterrows():
+                    cursor.execute(
+                        "DELETE FROM institutions WHERE institution_id = ? AND year = ?",
+                        (row['institution_id'], row['year'])
+                    )
+                analyzer.conn.commit()
+                
+                # Update historical data
+                analyzer.historical_data = analyzer.historical_data[
+                    ~analyzer.historical_data['institution_id'].isin(selected_institutions)
+                ]
+                
+                st.success(f"✅ Deleted {len(filtered_data)} records")
+
+
+
+def restore_from_backup(analyzer, selected_backup):
+    """Restore database from selected backup"""
+    try:
+        # Extract filename from display string
+        backup_filename = selected_backup.split(" - ")[-1]
+        backup_path = os.path.join("backups", backup_filename)
+        
+        if not os.path.exists(backup_path):
+            st.error(f"Backup file not found: {backup_path}")
+            return
+        
+        with st.spinner(f"Restoring from backup: {backup_filename}..."):
+            # Load backup data
+            with open(backup_path, 'r') as f:
+                backup_data = json.load(f)
+            
+            # Clear existing data
+            cursor = analyzer.conn.cursor()
+            cursor.execute("DELETE FROM institutions")
+            cursor.execute("DELETE FROM institution_documents")
+            
+            # Restore institutions
+            institutions_df = pd.DataFrame(backup_data['institutions'])
+            institutions_df.to_sql('institutions', analyzer.conn, if_exists='append', index=False)
+            
+            # Restore documents if available
+            if 'documents' in backup_data and backup_data['documents']:
+                documents_df = pd.DataFrame(backup_data['documents'])
+                documents_df.to_sql('institution_documents', analyzer.conn, if_exists='append', index=False)
+            
+            analyzer.conn.commit()
+            
+            # Update analyzer's historical data
+            analyzer.historical_data = institutions_df
+            
+            st.success(f"✅ Successfully restored backup from {backup_data['metadata']['backup_date']}")
+            st.info(f"📊 Restored: {len(backup_data['institutions'])} institutions")
+            
+    except Exception as e:
+        st.error(f"❌ Error restoring backup: {str(e)}")
+        
+
+def get_database_information(analyzer):
+    """Get comprehensive database information and health metrics"""
+    try:
+        cursor = analyzer.conn.cursor()
+        
+        # Basic information
+        cursor.execute("SELECT COUNT(*) FROM institutions")
+        total_records = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(DISTINCT institution_id) FROM institutions")
+        unique_institutions = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT MIN(year), MAX(year) FROM institutions")
+        min_year, max_year = cursor.fetchone()
+        
+        # Calculate database size (approximate)
+        cursor.execute("SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()")
+        db_size_bytes = cursor.fetchone()[0]
+        db_size_mb = db_size_bytes / (1024 * 1024)
+        
+        # Data age (days since last update)
+        cursor.execute("SELECT MAX(year) FROM institutions")
+        latest_year = cursor.fetchone()[0]
+        current_year = datetime.now().year
+        data_age_years = current_year - latest_year if latest_year else 1
+        
+        # Check last backup
+        backup_dir = "backups"
+        last_backup = "No backup found"
+        if os.path.exists(backup_dir):
+            backup_files = glob.glob(os.path.join(backup_dir, "backup_*.json"))
+            if backup_files:
+                latest_backup = max(backup_files, key=os.path.getmtime)
+                backup_time = os.path.getmtime(latest_backup)
+                last_backup = datetime.fromtimestamp(backup_time).strftime("%Y-%m-%d %H:%M")
+        
+        # Calculate consistency score
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        consistency_score = 5.0
+        
+        if len(current_year_data) > 0:
+            # Check for logical inconsistencies
+            inconsistencies = 0
+            for _, row in current_year_data.iterrows():
+                score = row.get('performance_score', 0)
+                risk = row.get('risk_level', '')
+                
+                # Basic consistency check
+                if score >= 8.0 and risk != 'Low Risk':
+                    inconsistencies += 1
+                elif score < 5.0 and risk not in ['High Risk', 'Critical Risk']:
+                    inconsistencies += 1
+            
+            consistency_score = max(1, 10 - (inconsistencies / len(current_year_data)) * 10)
+        
+        # Determine recommended action
+        recommended_action = "No action required"
+        if data_age_years > 1:
+            recommended_action = "Update data to current year"
+        elif consistency_score < 7.0:
+            recommended_action = "Run data validation"
+        elif db_size_mb > 100:
+            recommended_action = "Consider archiving old data"
+        
+        return {
+            'total_records': total_records,
+            'unique_institutions': unique_institutions,
+            'year_range': f"{min_year}-{max_year}" if min_year and max_year else "N/A",
+            'size_mb': round(db_size_mb, 2),
+            'last_backup': last_backup,
+            'data_age_days': data_age_years * 365,
+            'consistency_score': round(consistency_score, 1),
+            'recommended_action': recommended_action
+        }
+        
+    except Exception as e:
+        print(f"Error getting database info: {e}")
+        return {
+            'total_records': 0,
+            'unique_institutions': 0,
+            'year_range': "N/A",
+            'size_mb': 0,
+            'last_backup': "Error",
+            'data_age_days': 999,
+            'consistency_score': 0,
+            'recommended_action': "Check database connection"
+        }
+
 def create_backup(analyzer):
     """Create a timestamped backup of the database"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
