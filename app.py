@@ -356,7 +356,7 @@ col1, col2 = st.columns([1, 4])
 with col1:
     # Display logo (make sure logo.jpg is in the same directory as your app.py)
     try:
-        st.image("logo.jpg", width=100)
+        st.image("logo.jpg", width=300)
     except FileNotFoundError:
         st.warning("Logo file not found. Please ensure logo.jpg is in the root directory.")
         
