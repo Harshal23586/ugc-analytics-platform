@@ -3149,6 +3149,34 @@ def create_document_analysis_module(analyzer):
     if st.button("🤖 Analyze Document Sufficiency", type="primary"):
         perform_enhanced_document_analysis(selected_institution, approval_type, analyzer, institution_performance)
 
+def get_institution_performance(institution_id, analyzer):
+    """Get institution performance data"""
+    try:
+        # Get the current year data (2023)
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        
+        inst_data = current_year_data[current_year_data['institution_id'] == institution_id]
+        
+        if not inst_data.empty:
+            return {
+                'performance_score': float(inst_data['performance_score'].iloc[0]),
+                'naac_grade': str(inst_data['naac_grade'].iloc[0]),
+                'risk_level': str(inst_data['risk_level'].iloc[0]),
+                'institution_name': str(inst_data['institution_name'].iloc[0]),
+                'institution_type': str(inst_data['institution_type'].iloc[0])
+            }
+    except Exception as e:
+        print(f"Error getting institution performance: {e}")
+    
+    # Return default values if data not found
+    return {
+        'performance_score': 5.0,
+        'naac_grade': 'B',
+        'risk_level': 'Medium Risk',
+        'institution_name': 'Unknown Institution',
+        'institution_type': 'General'
+    }
+
 
 
 def display_performance_context(performance, institution_id):
@@ -3200,7 +3228,7 @@ def generate_enhanced_dummy_document_data(analyzer):
     
     if 'enhanced_docs_generated' not in st.session_state:
         try:
-            # Get all institutions
+            # Get all institutions (20 institutions)
             institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
             
             for institution_id in institutions:
@@ -3225,9 +3253,10 @@ def generate_enhanced_dummy_document_data(analyzer):
                 analyzer.conn.commit()
             
             st.session_state.enhanced_docs_generated = True
+            print(f"✅ Generated enhanced document data for {len(institutions)} institutions")
             
         except Exception as e:
-            st.warning(f"Could not generate enhanced dummy documents: {e}")
+            print(f"Could not generate enhanced dummy documents: {e}")
 
 
 def generate_enhanced_institution_documents(institution_id, performance):
@@ -3251,27 +3280,6 @@ def generate_enhanced_institution_documents(institution_id, performance):
             {"name": "Organizational Structure.pdf", "type": "organizational_structure"},
             {"name": "Budget Allocation Document.pdf", "type": "budget_allocation"},
             {"name": "Learning Outcome Assessment.pdf", "type": "learning_outcomes"},
-        ],
-        "mandatory_standard": [
-            {"name": "Program Structure Document.pdf", "type": "program_structure"},
-            {"name": "Faculty Development Records.pdf", "type": "faculty_development"},
-            {"name": "Governance Committee Minutes.pdf", "type": "governance_minutes"},
-            {"name": "Audit Reports.pdf", "type": "audit_reports"},
-            {"name": "Staff Appointment Letters.pdf", "type": "appointment_letters"},
-        ],
-        "supporting_essential": [
-            {"name": "Research Publications List.pdf", "type": "research_publications"},
-            {"name": "Campus Master Plan.pdf", "type": "campus_plan"},
-            {"name": "Industry Collaboration Records.pdf", "type": "industry_collaboration"},
-            {"name": "Student Placement Records.pdf", "type": "placement_records"},
-            {"name": "Library Resources Report.pdf", "type": "library_resources"},
-        ],
-        "supporting_enhanced": [
-            {"name": "Research Projects Documentation.pdf", "type": "research_projects"},
-            {"name": "Laboratory Equipment Inventory.pdf", "type": "lab_equipment"},
-            {"name": "Community Engagement Reports.pdf", "type": "community_engagement"},
-            {"name": "Patent Filings Record.pdf", "type": "patent_records"},
-            {"name": "IT Infrastructure Details.pdf", "type": "it_infrastructure"},
         ]
     }
     
@@ -3282,41 +3290,25 @@ def generate_enhanced_institution_documents(institution_id, performance):
         pattern = {
             "mandatory_critical": 1.0,  # 100% uploaded
             "mandatory_important": 0.95, # 95% uploaded
-            "mandatory_standard": 0.90,  # 90% uploaded
-            "supporting_essential": 0.85, # 85% uploaded
-            "supporting_enhanced": 0.80   # 80% uploaded
         }
-        performance_boost = 0.3
         
     elif performance_score >= 7.0:  # Good performers
         pattern = {
             "mandatory_critical": 1.0,   # 100% uploaded
             "mandatory_important": 0.85, # 85% uploaded
-            "mandatory_standard": 0.75,  # 75% uploaded
-            "supporting_essential": 0.65, # 65% uploaded
-            "supporting_enhanced": 0.50   # 50% uploaded
         }
-        performance_boost = 0.15
         
     elif performance_score >= 5.5:  # Average performers
         pattern = {
             "mandatory_critical": 0.90,  # 90% uploaded
             "mandatory_important": 0.70, # 70% uploaded
-            "mandatory_standard": 0.50,  # 50% uploaded
-            "supporting_essential": 0.40, # 40% uploaded
-            "supporting_enhanced": 0.25   # 25% uploaded
         }
-        performance_boost = 0.0
         
     else:  # Low performers
         pattern = {
             "mandatory_critical": 0.60,  # 60% uploaded
             "mandatory_important": 0.40, # 40% uploaded
-            "mandatory_standard": 0.25,  # 25% uploaded
-            "supporting_essential": 0.15, # 15% uploaded
-            "supporting_enhanced": 0.05   # 5% uploaded
         }
-        performance_boost = -0.2
     
     # Generate upload dates (within last 6 months)
     base_date = datetime.now()
@@ -3342,9 +3334,6 @@ def generate_enhanced_institution_documents(institution_id, performance):
                     "status": "Pending",
                     "upload_date": None
                 })
-    
-    # Update institution performance based on document uploads
-    update_institution_performance(institution_id, performance_boost, analyzer)
     
     return uploaded_documents
 
