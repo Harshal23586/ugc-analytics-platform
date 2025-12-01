@@ -44,6 +44,14 @@ if 'session_initialized' not in st.session_state:
     st.session_state.rag_analysis = None
     st.session_state.selected_institution = None
 
+# Add to imports section at the top
+try:
+    from report_generator import PDFReportGenerator
+    PDF_REPORT_AVAILABLE = True
+except ImportError:
+    PDF_REPORT_AVAILABLE = False
+    st.warning("PDF report generation not available. Install fpdf: pip install fpdf")
+
 def create_api_documentation():
     """Create API documentation and testing interface"""
     st.header("🌐 API Integration Portal")
