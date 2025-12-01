@@ -3032,8 +3032,8 @@ def create_document_analysis_module(analyzer):
     
     st.info("Analyze document completeness and generate sufficiency reports for approval processes")
     
-    # Generate dummy document data for institutions if not exists
-    generate_dummy_document_data(analyzer)
+    # Generate enhanced dummy document data with realistic patterns
+    generate_enhanced_dummy_document_data(analyzer)
     
     # Institution selection
     current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
@@ -3056,12 +3056,14 @@ def create_document_analysis_module(analyzer):
     # Display performance context
     display_performance_context(institution_performance, selected_institution)
     
-    # Display document checklist
-    display_document_checklist(selected_institution, approval_type, analyzer, institution_performance)
+    # Display document checklist with enhanced status
+    display_enhanced_document_checklist(selected_institution, approval_type, analyzer, institution_performance)
     
     # Analysis and recommendations
     if st.button("🤖 Analyze Document Sufficiency", type="primary"):
-        perform_document_analysis(selected_institution, approval_type, analyzer, institution_performance)
+        perform_enhanced_document_analysis(selected_institution, approval_type, analyzer, institution_performance)
+
+
 
 def display_performance_context(performance, institution_id):
     """Display institution performance context"""
@@ -3107,10 +3109,10 @@ def display_performance_context(performance, institution_id):
 
 
 
-def generate_dummy_document_data(analyzer):
-    """Generate realistic dummy document data for all institutions"""
+def generate_enhanced_dummy_document_data(analyzer):
+    """Generate realistic dummy document data with upload patterns and dates"""
     
-    if 'dummy_docs_generated' not in st.session_state:
+    if 'enhanced_docs_generated' not in st.session_state:
         try:
             # Get all institutions
             institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
@@ -3123,327 +3125,429 @@ def generate_dummy_document_data(analyzer):
                 cursor = analyzer.conn.cursor()
                 cursor.execute('DELETE FROM institution_documents WHERE institution_id = ?', (institution_id,))
                 
-                # Generate documents based on performance
-                documents = generate_institution_documents(institution_id, performance)
+                # Generate enhanced documents with realistic patterns
+                documents = generate_enhanced_institution_documents(institution_id, performance)
                 
-                # Insert into database
+                # Insert into database with upload dates
                 for doc in documents:
                     cursor.execute('''
                         INSERT INTO institution_documents 
-                        (institution_id, document_name, document_type, status)
-                        VALUES (?, ?, ?, ?)
-                    ''', (institution_id, doc['name'], doc['type'], 'Uploaded'))
+                        (institution_id, document_name, document_type, status, upload_date)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', (institution_id, doc['name'], doc['type'], doc['status'], doc['upload_date']))
                 
                 analyzer.conn.commit()
             
-            st.session_state.dummy_docs_generated = True
+            st.session_state.enhanced_docs_generated = True
             
         except Exception as e:
-            st.warning(f"Could not generate dummy documents: {e}")
+            st.warning(f"Could not generate enhanced dummy documents: {e}")
 
-def generate_institution_documents(institution_id, performance):
-    """Generate realistic document set based on institution performance"""
+
+def generate_enhanced_institution_documents(institution_id, performance):
+    """Generate realistic document set with upload patterns and dates"""
     
     performance_score = performance['performance_score']
-    risk_level = performance['risk_level']
+    institution_type = performance['institution_type']
     
-    # Base document templates
-    all_documents = [
-        # Curriculum Documents
-        {"name": "Curriculum Framework 2023.pdf", "type": "curriculum_framework"},
-        {"name": "Course Outlines and Syllabi.docx", "type": "course_outlines"},
-        {"name": "Academic Calendar 2023-24.pdf", "type": "academic_calendar"},
-        {"name": "Program Structure Document.pdf", "type": "program_structure"},
-        {"name": "Learning Outcome Assessment.pdf", "type": "learning_outcomes"},
-        
-        # Faculty Documents
-        {"name": "Faculty Qualification Records.pdf", "type": "faculty_qualifications"},
-        {"name": "Faculty Recruitment Policy.pdf", "type": "recruitment_policy"},
-        {"name": "Faculty Development Records.pdf", "type": "faculty_development"},
-        {"name": "Staff Appointment Letters.pdf", "type": "appointment_letters"},
-        {"name": "Faculty Performance Reviews.pdf", "type": "performance_reviews"},
-        
-        # Governance Documents
-        {"name": "Institutional Statutes.pdf", "type": "institutional_statutes"},
-        {"name": "Organizational Structure.pdf", "type": "organizational_structure"},
-        {"name": "Governance Committee Minutes.pdf", "type": "governance_minutes"},
-        {"name": "Financial Management Policy.pdf", "type": "financial_policy"},
-        {"name": "Administrative Manual.pdf", "type": "administrative_manual"},
-        
-        # Research Documents
-        {"name": "Research Publications List.pdf", "type": "research_publications"},
-        {"name": "Research Projects Documentation.pdf", "type": "research_projects"},
-        {"name": "Patent Filings Record.pdf", "type": "patent_records"},
-        {"name": "Research Collaboration Agreements.pdf", "type": "collaboration_agreements"},
-        {"name": "Research Facility Details.pdf", "type": "research_facilities"},
-        
-        # Infrastructure Documents
-        {"name": "Campus Master Plan.pdf", "type": "campus_plan"},
-        {"name": "Building Infrastructure Details.pdf", "type": "building_infrastructure"},
-        {"name": "Laboratory Equipment Inventory.pdf", "type": "lab_equipment"},
-        {"name": "Library Resources Report.pdf", "type": "library_resources"},
-        {"name": "IT Infrastructure Details.pdf", "type": "it_infrastructure"},
-        
-        # Financial Documents
-        {"name": "Annual Financial Statements.pdf", "type": "financial_statements"},
-        {"name": "Budget Allocation Document.pdf", "type": "budget_allocation"},
-        {"name": "Audit Reports.pdf", "type": "audit_reports"},
-        {"name": "Grant Utilization Certificates.pdf", "type": "grant_utilization"},
-        {"name": "Infrastructure Investment Plan.pdf", "type": "investment_plan"},
-        
-        # Supporting Documents
-        {"name": "Industry Collaboration Records.pdf", "type": "industry_collaboration"},
-        {"name": "Student Placement Records.pdf", "type": "placement_records"},
-        {"name": "Community Engagement Reports.pdf", "type": "community_engagement"},
-        {"name": "Environmental Sustainability Report.pdf", "type": "sustainability_report"},
-        {"name": "Quality Assurance Reports.pdf", "type": "quality_assurance"}
-    ]
+    # Enhanced document templates with categories
+    all_documents = {
+        "mandatory_critical": [
+            {"name": "Curriculum Framework 2023.pdf", "type": "curriculum_framework"},
+            {"name": "Faculty Qualification Records.pdf", "type": "faculty_qualifications"},
+            {"name": "Institutional Statutes.pdf", "type": "institutional_statutes"},
+            {"name": "Annual Financial Statements.pdf", "type": "financial_statements"},
+            {"name": "Academic Calendar 2023-24.pdf", "type": "academic_calendar"},
+        ],
+        "mandatory_important": [
+            {"name": "Course Outlines and Syllabi.docx", "type": "course_outlines"},
+            {"name": "Faculty Recruitment Policy.pdf", "type": "recruitment_policy"},
+            {"name": "Organizational Structure.pdf", "type": "organizational_structure"},
+            {"name": "Budget Allocation Document.pdf", "type": "budget_allocation"},
+            {"name": "Learning Outcome Assessment.pdf", "type": "learning_outcomes"},
+        ],
+        "mandatory_standard": [
+            {"name": "Program Structure Document.pdf", "type": "program_structure"},
+            {"name": "Faculty Development Records.pdf", "type": "faculty_development"},
+            {"name": "Governance Committee Minutes.pdf", "type": "governance_minutes"},
+            {"name": "Audit Reports.pdf", "type": "audit_reports"},
+            {"name": "Staff Appointment Letters.pdf", "type": "appointment_letters"},
+        ],
+        "supporting_essential": [
+            {"name": "Research Publications List.pdf", "type": "research_publications"},
+            {"name": "Campus Master Plan.pdf", "type": "campus_plan"},
+            {"name": "Industry Collaboration Records.pdf", "type": "industry_collaboration"},
+            {"name": "Student Placement Records.pdf", "type": "placement_records"},
+            {"name": "Library Resources Report.pdf", "type": "library_resources"},
+        ],
+        "supporting_enhanced": [
+            {"name": "Research Projects Documentation.pdf", "type": "research_projects"},
+            {"name": "Laboratory Equipment Inventory.pdf", "type": "lab_equipment"},
+            {"name": "Community Engagement Reports.pdf", "type": "community_engagement"},
+            {"name": "Patent Filings Record.pdf", "type": "patent_records"},
+            {"name": "IT Infrastructure Details.pdf", "type": "it_infrastructure"},
+        ]
+    }
     
-    # Determine which documents are uploaded based on performance
     uploaded_documents = []
     
-    # High performers (8+ score) upload almost all documents
-    if performance_score >= 8.0:
-        # Upload 90% of documents
-        upload_probability = 0.9
-    # Medium performers (6-8 score) upload most documents
-    elif performance_score >= 6.0:
-        # Upload 75% of documents
-        upload_probability = 0.75
-    # Low performers (<6 score) upload fewer documents
-    else:
-        # Upload 50% of documents
-        upload_probability = 0.5
+    # Define upload patterns based on performance
+    if performance_score >= 8.5:  # Top performers
+        pattern = {
+            "mandatory_critical": 1.0,  # 100% uploaded
+            "mandatory_important": 0.95, # 95% uploaded
+            "mandatory_standard": 0.90,  # 90% uploaded
+            "supporting_essential": 0.85, # 85% uploaded
+            "supporting_enhanced": 0.80   # 80% uploaded
+        }
+        performance_boost = 0.3
+        
+    elif performance_score >= 7.0:  # Good performers
+        pattern = {
+            "mandatory_critical": 1.0,   # 100% uploaded
+            "mandatory_important": 0.85, # 85% uploaded
+            "mandatory_standard": 0.75,  # 75% uploaded
+            "supporting_essential": 0.65, # 65% uploaded
+            "supporting_enhanced": 0.50   # 50% uploaded
+        }
+        performance_boost = 0.15
+        
+    elif performance_score >= 5.5:  # Average performers
+        pattern = {
+            "mandatory_critical": 0.90,  # 90% uploaded
+            "mandatory_important": 0.70, # 70% uploaded
+            "mandatory_standard": 0.50,  # 50% uploaded
+            "supporting_essential": 0.40, # 40% uploaded
+            "supporting_enhanced": 0.25   # 25% uploaded
+        }
+        performance_boost = 0.0
+        
+    else:  # Low performers
+        pattern = {
+            "mandatory_critical": 0.60,  # 60% uploaded
+            "mandatory_important": 0.40, # 40% uploaded
+            "mandatory_standard": 0.25,  # 25% uploaded
+            "supporting_essential": 0.15, # 15% uploaded
+            "supporting_enhanced": 0.05   # 5% uploaded
+        }
+        performance_boost = -0.2
     
-    # Adjust based on risk level
-    if risk_level == "Low Risk":
-        upload_probability += 0.1
-    elif risk_level == "High Risk":
-        upload_probability -= 0.2
-    elif risk_level == "Critical Risk":
-        upload_probability -= 0.3
+    # Generate upload dates (within last 6 months)
+    base_date = datetime.now()
     
-    # Ensure probability is within bounds
-    upload_probability = max(0.3, min(0.95, upload_probability))
+    for category, docs in all_documents.items():
+        upload_probability = pattern[category]
+        
+        for doc in docs:
+            if np.random.random() < upload_probability:
+                # Document is uploaded - generate realistic upload date
+                days_ago = np.random.randint(1, 180)  # Within last 6 months
+                upload_date = base_date - timedelta(days=days_ago)
+                
+                uploaded_documents.append({
+                    **doc,
+                    "status": "Uploaded",
+                    "upload_date": upload_date
+                })
+            else:
+                # Document is pending
+                uploaded_documents.append({
+                    **doc,
+                    "status": "Pending",
+                    "upload_date": None
+                })
     
-    # Select documents to upload
-    for doc in all_documents:
-        if np.random.random() < upload_probability:
-            uploaded_documents.append(doc)
-    
-    # Ensure at least some documents are always uploaded
-    if len(uploaded_documents) < 10:
-        # Add essential documents
-        essential_docs = all_documents[:10]
-        for doc in essential_docs:
-            if doc not in uploaded_documents:
-                uploaded_documents.append(doc)
+    # Update institution performance based on document uploads
+    update_institution_performance(institution_id, performance_boost, analyzer)
     
     return uploaded_documents
 
-def get_institution_performance(institution_id, analyzer):
-    """Get institution performance data"""
+def update_institution_performance(institution_id, performance_boost, analyzer):
+    """Update institution performance based on document upload completeness"""
     try:
-        inst_data = analyzer.historical_data[
-            (analyzer.historical_data['institution_id'] == institution_id) & 
-            (analyzer.historical_data['year'] == 2023)
-        ]
+        cursor = analyzer.conn.cursor()
         
-        if not inst_data.empty:
-            return {
-                'performance_score': inst_data['performance_score'].iloc[0],
-                'naac_grade': inst_data['naac_grade'].iloc[0],
-                'risk_level': inst_data['risk_level'].iloc[0],
-                'institution_name': inst_data['institution_name'].iloc[0],
-                'institution_type': inst_data['institution_type'].iloc[0]
-            }
-    except:
-        pass
+        # Get current performance
+        cursor.execute('''
+            SELECT performance_score FROM institutions 
+            WHERE institution_id = ? AND year = 2023
+        ''', (institution_id,))
+        
+        result = cursor.fetchone()
+        if result:
+            current_score = result[0]
+            new_score = min(10.0, max(1.0, current_score + performance_boost))
+            
+            # Update performance score
+            cursor.execute('''
+                UPDATE institutions 
+                SET performance_score = ? 
+                WHERE institution_id = ? AND year = 2023
+            ''', (new_score, institution_id))
+            
+            # Update approval recommendation and risk level
+            new_recommendation = generate_approval_recommendation(new_score)
+            new_risk_level = assess_risk_level(new_score)
+            
+            cursor.execute('''
+                UPDATE institutions 
+                SET approval_recommendation = ?, risk_level = ?
+                WHERE institution_id = ? AND year = 2023
+            ''', (new_recommendation, new_risk_level, institution_id))
+            
+            analyzer.conn.commit()
+            
+    except Exception as e:
+        print(f"Error updating performance: {e}")
+
+
+
+def perform_enhanced_document_analysis(institution_id, approval_type, analyzer, performance):
+    """Perform enhanced document analysis with performance impact"""
     
-    return {
-        'performance_score': 5.0,
-        'naac_grade': 'B',
-        'risk_level': 'Medium Risk',
-        'institution_name': 'Unknown',
-        'institution_type': 'General'
-    }
-
-
-
-def perform_document_analysis(institution_id, approval_type, analyzer, performance):
-    """Perform enhanced document sufficiency analysis with performance correlation"""
+    counts = st.session_state.get('enhanced_document_counts', {})
     
-    # Get counts from session state
-    counts = st.session_state.get('document_counts', {
-        'total_mandatory': 0,
-        'uploaded_mandatory': 0,
-        'total_supporting': 0,
-        'uploaded_supporting': 0,
-        'uploaded_docs': [],
-        'performance': performance
-    })
+    if not counts:
+        st.error("No document data available for analysis")
+        return
     
     total_mandatory = counts['total_mandatory']
     uploaded_mandatory = counts['uploaded_mandatory']
-    total_supporting = counts['total_supporting']
+    pending_mandatory = counts['pending_mandatory']
     uploaded_supporting = counts['uploaded_supporting']
-    uploaded_docs = counts['uploaded_docs']
     performance_data = counts['performance']
     
-    # Calculate percentages
+    # Calculate enhanced metrics
     mandatory_sufficiency = (uploaded_mandatory / total_mandatory) * 100 if total_mandatory > 0 else 0
-    overall_sufficiency = ((uploaded_mandatory + uploaded_supporting) / (total_mandatory + total_supporting)) * 100 if (total_mandatory + total_supporting) > 0 else 0
+    compliance_score = min(100, mandatory_sufficiency * 1.2)  # Bonus for timeliness
     
-    # Display analysis results
-    st.subheader("📊 Document Sufficiency Analysis")
+    st.subheader("🎯 Enhanced Document Performance Analysis")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Mandatory Uploaded", f"{uploaded_mandatory}/{total_mandatory}")
+        st.metric("Mandatory Compliance", f"{mandatory_sufficiency:.1f}%")
     
     with col2:
-        st.metric("Mandatory Sufficiency", f"{mandatory_sufficiency:.1f}%")
+        st.metric("Pending Documents", pending_mandatory)
     
     with col3:
-        st.metric("Supporting Uploaded", f"{uploaded_supporting}/{total_supporting}")
+        st.metric("Supporting Documents", uploaded_supporting)
     
     with col4:
-        st.metric("Performance Score", f"{performance_data['performance_score']:.1f}/10")
+        st.metric("Overall Score", f"{performance_data['performance_score']:.1f}/10")
     
-    # Performance-Document Correlation Analysis
-    st.subheader("🔗 Performance-Document Correlation")
+    # Performance Impact Analysis
+    st.subheader("📈 Document Upload Impact on Performance")
     
-    # Calculate correlation insights
-    expected_coverage = min(100, max(50, performance_data['performance_score'] * 10))
-    actual_coverage = mandatory_sufficiency
-    
-    if actual_coverage >= expected_coverage:
-        st.success(f"✅ **Document coverage ({actual_coverage:.1f}%) meets/exceeds expected level ({expected_coverage:.1f}%) for performance score**")
+    # Show how document upload affects performance
+    if mandatory_sufficiency >= 90:
+        st.success("**🏆 EXCELLENT COMPLIANCE**: High document upload rate significantly boosts institutional performance")
+        st.write("**Impact**: +0.3 points added to performance score")
+    elif mandatory_sufficiency >= 70:
+        st.info("**📊 GOOD COMPLIANCE**: Solid document submission supports institutional performance")
+        st.write("**Impact**: +0.15 points added to performance score")
+    elif mandatory_sufficiency >= 50:
+        st.warning("**⚠️ AVERAGE COMPLIANCE**: Incomplete submission limits performance potential")
+        st.write("**Impact**: No performance boost - missed opportunity")
     else:
-        st.warning(f"⚠️ **Document coverage ({actual_coverage:.1f}%) below expected level ({expected_coverage:.1f}%) for performance score**")
+        st.error("**🚨 POOR COMPLIANCE**: Significant document gaps negatively impact performance")
+        st.write("**Impact**: -0.2 points deducted from performance score")
     
-    # Enhanced AI Recommendations based on performance
-    st.subheader("💡 AI Recommendations")
+    # Timeline Analysis
+    st.subheader("⏰ Submission Timeline Analysis")
     
-    if performance_data['performance_score'] >= 8.0 and mandatory_sufficiency < 100:
-        st.warning("**🎯 High Performer Alert**: Institution shows excellent performance but document submission is incomplete.")
-        st.write("**Recommendation**: Complete document submission to maintain high accreditation standards.")
-    
-    elif performance_data['performance_score'] < 6.0 and mandatory_sufficiency < 80:
-        st.error("**🚨 Critical Issue**: Low performance combined with poor document submission.")
-        st.write("**Action Required**: Immediate attention needed for both performance improvement and document completion.")
-    
-    elif mandatory_sufficiency < 50:
-        st.error("**❌ Critical Document Gap**: Less than 50% of mandatory documents uploaded.")
-        st.write("**Impact**: Approval process cannot proceed without essential documents.")
-    
-    elif mandatory_sufficiency < 80:
-        st.warning("**🟡 Document Gaps Identified**: Some mandatory documents missing.")
-        st.write("**Impact**: Approval process may face delays.")
-    
+    uploaded_docs = [d for d in counts['uploaded_docs_data'] if d['status'] == 'Uploaded']
+    if uploaded_docs:
+        # Calculate average days since upload
+        recent_uploads = 0
+        for doc in uploaded_docs:
+            days_ago = (datetime.now() - pd.to_datetime(doc['upload_date'])).days
+            if days_ago <= 30:  # Within last month
+                recent_uploads += 1
+        
+        recent_upload_rate = (recent_uploads / len(uploaded_docs)) * 100
+        
+        if recent_upload_rate >= 80:
+            st.success("**🕒 ACTIVE SUBMISSION**: Most documents uploaded recently")
+        elif recent_upload_rate >= 50:
+            st.info("**📅 STEADY PROGRESS**: Regular document submission pattern")
+        else:
+            st.warning("**⏳ DELAYED UPLOADS**: Many documents uploaded long time ago")
     else:
-        st.success("**✅ Document Status Excellent**: Strong document submission supporting institutional performance.")
+        st.error("**📭 NO UPLOADS**: Institution has not submitted any documents")
     
-    # Rest of the analysis remains similar but now includes performance context
-    # ... (previous analysis code for progress bars, missing documents, parameter coverage, readiness assessment)
+    # Institutional Comparison
+    st.subheader("🏛️ Peer Institution Comparison")
+    
+    # Get all institutions for comparison
+    all_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+    
+    # Simulate document upload rates for comparison
+    comparison_data = []
+    for _, inst in all_institutions.head(5).iterrows():
+        if inst['institution_id'] == institution_id:
+            # Current institution
+            comparison_data.append({
+                'Institution': f"📍 {inst['institution_name']} (Current)",
+                'Document Upload Rate': f"{mandatory_sufficiency:.1f}%",
+                'Performance Score': inst['performance_score']
+            })
+        else:
+            # Simulate upload rate based on performance
+            sim_upload_rate = min(100, inst['performance_score'] * 10 + np.random.randint(-10, 10))
+            comparison_data.append({
+                'Institution': inst['institution_name'],
+                'Document Upload Rate': f"{sim_upload_rate:.1f}%",
+                'Performance Score': inst['performance_score']
+            })
+    
+    comparison_df = pd.DataFrame(comparison_data)
+    st.dataframe(comparison_df, use_container_width=True)
 
-def display_document_checklist(institution_id, approval_type, analyzer, performance):
-    """Display the document checklist with upload status"""
+def display_enhanced_document_checklist(institution_id, approval_type, analyzer, performance):
+    """Display enhanced document checklist with upload dates and status"""
     
     # Get requirements
     requirements = get_document_requirements_by_parameters(approval_type)
     
-    # Get uploaded documents for this institution
-    uploaded_docs = []
+    # Get uploaded documents for this institution with dates
+    uploaded_docs_data = []
     try:
         uploaded_docs_df = analyzer.get_institution_documents(institution_id)
         if not uploaded_docs_df.empty:
-            uploaded_docs = uploaded_docs_df['document_name'].tolist()
+            for _, row in uploaded_docs_df.iterrows():
+                uploaded_docs_data.append({
+                    'name': row['document_name'],
+                    'type': row['document_type'],
+                    'status': row['status'],
+                    'upload_date': row['upload_date']
+                })
     except Exception as e:
         st.warning(f"Could not load uploaded documents: {e}")
     
-    # Display document statistics
-    st.subheader("📊 Document Statistics")
+    # Display enhanced document statistics
+    st.subheader("📊 Enhanced Document Analysis")
     
-    col1, col2, col3 = st.columns(3)
+    # Calculate statistics
+    total_docs = len(uploaded_docs_data)
+    uploaded_count = len([d for d in uploaded_docs_data if d['status'] == 'Uploaded'])
+    pending_count = len([d for d in uploaded_docs_data if d['status'] == 'Pending'])
+    
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        total_required = sum(len(docs) for docs in requirements["mandatory"].values())
-        st.metric("Total Required", total_required)
+        st.metric("Total Documents", total_docs)
     
     with col2:
-        st.metric("Uploaded Documents", len(uploaded_docs))
+        st.metric("Uploaded", uploaded_count, delta=f"+{uploaded_count}")
     
     with col3:
-        coverage = (len(uploaded_docs) / total_required * 100) if total_required > 0 else 0
-        st.metric("Coverage", f"{coverage:.1f}%")
+        st.metric("Pending", pending_count, delta=f"-{pending_count}", delta_color="inverse")
     
-    # Display mandatory documents
-    st.subheader("📋 Mandatory Documents Checklist")
+    with col4:
+        completion_rate = (uploaded_count / total_docs * 100) if total_docs > 0 else 0
+        st.metric("Completion Rate", f"{completion_rate:.1f}%")
+    
+    # Display mandatory documents with enhanced status
+    st.subheader("📋 Mandatory Documents Status")
     
     total_mandatory = 0
     uploaded_mandatory = 0
+    pending_mandatory = 0
     
     for parameter, documents in requirements["mandatory"].items():
-        with st.expander(f"✅ {parameter} - Mandatory Documents ({len(documents)} required)", expanded=True):
+        with st.expander(f"🔴 {parameter} - Mandatory Documents", expanded=True):
             for doc_template in documents:
                 total_mandatory += 1
-                # Check if similar document is uploaded
-                is_uploaded = any(doc_template.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)
                 
-                if is_uploaded:
-                    uploaded_mandatory += 1
+                # Find matching uploaded document
+                matching_doc = None
+                for uploaded_doc in uploaded_docs_data:
+                    if doc_template.lower() in uploaded_doc['name'].lower():
+                        matching_doc = uploaded_doc
+                        break
                 
-                col1, col2 = st.columns([3, 1])
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
                 with col1:
-                    if is_uploaded:
-                        st.success(f"✓ {doc_template}")
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        days_ago = (datetime.now() - pd.to_datetime(matching_doc['upload_date'])).days
+                        st.success(f"✅ {doc_template}")
+                        st.caption(f"📅 Uploaded {days_ago} days ago")
                     else:
-                        st.error(f"✗ {doc_template}")
+                        st.error(f"❌ {doc_template}")
+                        st.caption("⏳ Status: Pending - Institution has failed to submit")
                 
                 with col2:
-                    if is_uploaded:
-                        st.markdown("**Uploaded** ✅")
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        st.markdown("**✅ Uploaded**")
+                        uploaded_mandatory += 1
                     else:
-                        st.markdown("**Missing** ❌")
+                        st.markdown("**🔴 Pending**")
+                        pending_mandatory += 1
+                
+                with col3:
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        upload_date = pd.to_datetime(matching_doc['upload_date']).strftime("%d %b %Y")
+                        st.markdown(f"**{upload_date}**")
+                    else:
+                        st.markdown("**OVERDUE**")
     
-    # Display supporting documents
-    st.subheader("📝 Supporting Documents Checklist")
+    # Display supporting documents with enhanced status
+    st.subheader("📝 Supporting Documents Status")
     
     total_supporting = 0
     uploaded_supporting = 0
+    pending_supporting = 0
     
     for parameter, documents in requirements["supporting"].items():
-        with st.expander(f"📊 {parameter} - Supporting Documents ({len(documents)} recommended)"):
+        with st.expander(f"🟡 {parameter} - Supporting Documents"):
             for doc_template in documents:
                 total_supporting += 1
-                # Check if similar document is uploaded
-                is_uploaded = any(doc_template.lower() in uploaded_doc.lower() for uploaded_doc in uploaded_docs)
                 
-                if is_uploaded:
-                    uploaded_supporting += 1
+                # Find matching uploaded document
+                matching_doc = None
+                for uploaded_doc in uploaded_docs_data:
+                    if doc_template.lower() in uploaded_doc['name'].lower():
+                        matching_doc = uploaded_doc
+                        break
                 
-                col1, col2 = st.columns([3, 1])
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
                 with col1:
-                    if is_uploaded:
-                        st.info(f"✓ {doc_template}")
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        days_ago = (datetime.now() - pd.to_datetime(matching_doc['upload_date'])).days
+                        st.info(f"✅ {doc_template}")
+                        st.caption(f"📅 Uploaded {days_ago} days ago")
                     else:
-                        st.warning(f"○ {doc_template}")
+                        st.warning(f"⭕ {doc_template}")
+                        st.caption("💡 Recommended for enhanced assessment")
                 
                 with col2:
-                    if is_uploaded:
-                        st.markdown("**Uploaded** ✅")
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        st.markdown("**✅ Uploaded**")
+                        uploaded_supporting += 1
                     else:
-                        st.markdown("**Optional** 🔄")
+                        st.markdown("**🟡 Optional**")
+                        pending_supporting += 1
+                
+                with col3:
+                    if matching_doc and matching_doc['status'] == 'Uploaded':
+                        upload_date = pd.to_datetime(matching_doc['upload_date']).strftime("%d %b %Y")
+                        st.markdown(f"**{upload_date}**")
+                    else:
+                        st.markdown("**NOT UPLOADED**")
     
-    # Store counts for analysis
-    st.session_state.document_counts = {
+    # Store enhanced counts for analysis
+    st.session_state.enhanced_document_counts = {
         'total_mandatory': total_mandatory,
         'uploaded_mandatory': uploaded_mandatory,
+        'pending_mandatory': pending_mandatory,
         'total_supporting': total_supporting,
         'uploaded_supporting': uploaded_supporting,
-        'uploaded_docs': uploaded_docs,
+        'pending_supporting': pending_supporting,
+        'uploaded_docs_data': uploaded_docs_data,
         'performance': performance
     }
 
