@@ -4605,9 +4605,7 @@ def create_data_management_module(analyzer):
             
             if st.button("📈 Calculate Derived Metrics"):
                 calculate_derived_metrics(analyzer)
-            
-            if st.button("🔄 Update Performance Scores"):
-                update_all_performance_scores(analyzer)
+
         
         # Data Quality Dashboard
         st.markdown("---")
@@ -4717,6 +4715,223 @@ def create_data_management_module(analyzer):
             st.write(f"- Data Age: {db_info['data_age_days']} days")
             st.write(f"- Consistency Score: {db_info['consistency_score']}/10")
             st.write(f"- Recommended Action: {db_info['recommended_action']}")
+
+def calculate_derived_metrics(analyzer):
+    """Calculate additional derived metrics from existing data"""
+    st.subheader("📈 Calculating Derived Metrics")
+    
+    with st.spinner("Analyzing data and calculating derived metrics..."):
+        current_data = analyzer.historical_data.copy()
+        
+        # Track which metrics were calculated
+        calculated_metrics = []
+        
+        # 1. Calculate Composite Scores
+        if all(col in current_data.columns for col in ['performance_score', 'placement_rate', 'research_publications']):
+            current_data['composite_score'] = (
+                current_data['performance_score'] * 0.5 +
+                (current_data['placement_rate'] / 10) * 0.3 +
+                (current_data['research_publications'] / 50) * 0.2
+            ).round(2)
+            calculated_metrics.append("composite_score")
+        
+        # 2. Calculate Research Intensity (publications per faculty)
+        if all(col in current_data.columns for col in ['research_publications', 'student_faculty_ratio']):
+            # Estimate faculty count from student_faculty_ratio
+            # Assuming 1000 students as baseline for estimation
+            current_data['estimated_faculty'] = (1000 / current_data['student_faculty_ratio']).round(0)
+            current_data['research_intensity'] = (
+                current_data['research_publications'] / current_data['estimated_faculty']
+            ).round(2)
+            calculated_metrics.append("research_intensity")
+        
+        # 3. Calculate Institutional Growth Rate (year-over-year)
+        if 'performance_score' in current_data.columns and 'year' in current_data.columns:
+            growth_rates = []
+            for institution_id in current_data['institution_id'].unique():
+                inst_data = current_data[current_data['institution_id'] == institution_id].sort_values('year')
+                if len(inst_data) > 1:
+                    # Calculate CAGR for performance score
+                    first_score = inst_data['performance_score'].iloc[0]
+                    last_score = inst_data['performance_score'].iloc[-1]
+                    years = inst_data['year'].iloc[-1] - inst_data['year'].iloc[0]
+                    
+                    if years > 0 and first_score > 0:
+                        cagr = ((last_score / first_score) ** (1/years) - 1) * 100
+                        growth_rates.append({
+                            'institution_id': institution_id,
+                            'growth_rate': round(cagr, 2)
+                        })
+            
+            if growth_rates:
+                growth_df = pd.DataFrame(growth_rates)
+                current_data = current_data.merge(growth_df, on='institution_id', how='left')
+                calculated_metrics.append("growth_rate")
+        
+        # 4. Calculate NAAC Score (convert grade to numeric)
+        if 'naac_grade' in current_data.columns:
+            naac_score_map = {
+                'A++': 10, 'A+': 9, 'A': 8, 
+                'B++': 7, 'B+': 6, 'B': 5, 'C': 4
+            }
+            current_data['naac_score'] = current_data['naac_grade'].map(naac_score_map)
+            calculated_metrics.append("naac_score")
+        
+        # 5. Calculate Innovation Index
+        if all(col in current_data.columns for col in ['patents_filed', 'industry_collaborations']):
+            current_data['innovation_index'] = (
+                (current_data['patents_filed'] * 0.6) + 
+                (current_data['industry_collaborations'] * 0.4)
+            ).round(2)
+            calculated_metrics.append("innovation_index")
+        
+        # 6. Calculate Student Success Score
+        if all(col in current_data.columns for col in ['placement_rate', 'higher_education_rate']):
+            current_data['student_success_score'] = (
+                (current_data['placement_rate'] * 0.7) +
+                (current_data['higher_education_rate'] * 0.3)
+            ).round(2)
+            calculated_metrics.append("student_success_score")
+        
+        # 7. Calculate Infrastructure Index
+        if all(col in current_data.columns for col in ['digital_infrastructure_score', 'library_volumes', 'laboratory_equipment_score']):
+            # Normalize library volumes (0-10 scale)
+            max_library = current_data['library_volumes'].max()
+            if max_library > 0:
+                library_score = (current_data['library_volumes'] / max_library) * 10
+            else:
+                library_score = 5
+            
+            current_data['infrastructure_index'] = (
+                current_data['digital_infrastructure_score'] * 0.4 +
+                library_score * 0.3 +
+                current_data['laboratory_equipment_score'] * 0.3
+            ).round(2)
+            calculated_metrics.append("infrastructure_index")
+        
+        # 8. Calculate Governance Excellence Score
+        if all(col in current_data.columns for col in ['financial_stability_score', 'compliance_score', 'administrative_efficiency']):
+            current_data['governance_score'] = (
+                current_data['financial_stability_score'] * 0.4 +
+                current_data['compliance_score'] * 0.3 +
+                current_data['administrative_efficiency'] * 0.3
+            ).round(2)
+            calculated_metrics.append("governance_score")
+        
+        # 9. Calculate Social Impact Score
+        if all(col in current_data.columns for col in ['community_projects', 'rural_outreach_score']):
+            # Normalize community projects (0-10 scale)
+            max_projects = current_data['community_projects'].max()
+            if max_projects > 0:
+                projects_score = (current_data['community_projects'] / max_projects) * 10
+            else:
+                projects_score = 5
+            
+            current_data['social_impact_score'] = (
+                projects_score * 0.6 +
+                current_data['rural_outreach_score'] * 0.4
+            ).round(2)
+            calculated_metrics.append("social_impact_score")
+        
+        # 10. Calculate NEP 2020 Compliance Score (simplified)
+        if all(col in current_data.columns for col in ['curriculum_framework_score', 'faculty_diversity_index', 
+                                                      'learning_outcome_achievement', 'entrepreneurship_cell_score']):
+            current_data['nep_compliance_score'] = (
+                current_data['curriculum_framework_score'] * 0.25 +
+                current_data['faculty_diversity_index'] * 0.25 +
+                (current_data['learning_outcome_achievement'] / 10) * 0.25 +
+                current_data['entrepreneurship_cell_score'] * 0.25
+            ).round(2)
+            calculated_metrics.append("nep_compliance_score")
+        
+        # Save calculated metrics to database
+        if calculated_metrics:
+            # Create a temporary table with new metrics
+            metrics_to_save = ['institution_id', 'year'] + calculated_metrics
+            derived_metrics_df = current_data[metrics_to_save].copy()
+            
+            # Check if derived_metrics table exists, create if not
+            cursor = analyzer.conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS derived_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    institution_id TEXT,
+                    year INTEGER,
+                    metric_name TEXT,
+                    metric_value REAL,
+                    calculated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (institution_id) REFERENCES institutions (institution_id)
+                )
+            """)
+            
+            # Clear existing derived metrics for these institutions/years
+            for institution_id in derived_metrics_df['institution_id'].unique():
+                for year in derived_metrics_df['year'].unique():
+                    cursor.execute("""
+                        DELETE FROM derived_metrics 
+                        WHERE institution_id = ? AND year = ?
+                    """, (institution_id, year))
+            
+            # Insert new derived metrics
+            for _, row in derived_metrics_df.iterrows():
+                for metric in calculated_metrics:
+                    if not pd.isna(row[metric]):
+                        cursor.execute("""
+                            INSERT INTO derived_metrics (institution_id, year, metric_name, metric_value)
+                            VALUES (?, ?, ?, ?)
+                        """, (row['institution_id'], row['year'], metric, row[metric]))
+            
+            analyzer.conn.commit()
+            
+            # Show results
+            st.success(f"✅ Calculated {len(calculated_metrics)} derived metrics!")
+            
+            # Display summary of calculated metrics
+            st.subheader("📊 Derived Metrics Summary")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Metrics", len(calculated_metrics))
+            with col2:
+                avg_composite = current_data['composite_score'].mean() if 'composite_score' in calculated_metrics else 0
+                st.metric("Avg Composite", f"{avg_composite:.2f}")
+            with col3:
+                avg_growth = current_data['growth_rate'].mean() if 'growth_rate' in calculated_metrics else 0
+                st.metric("Avg Growth Rate", f"{avg_growth:.2f}%")
+            with col4:
+                avg_nep = current_data['nep_compliance_score'].mean() if 'nep_compliance_score' in calculated_metrics else 0
+                st.metric("Avg NEP Score", f"{avg_nep:.2f}")
+            
+            # Show sample of calculated metrics
+            st.subheader("🧪 Sample Calculated Metrics (Current Year)")
+            
+            current_year_metrics = current_data[current_data['year'] == 2023]
+            if not current_year_metrics.empty:
+                sample_cols = ['institution_name'] + [m for m in calculated_metrics if m in current_year_metrics.columns]
+                st.dataframe(
+                    current_year_metrics[sample_cols].head(10),
+                    use_container_width=True
+                )
+            
+            # Visualize distribution of key metrics
+            if 'composite_score' in calculated_metrics:
+                st.subheader("📈 Composite Score Distribution")
+                fig = px.histogram(current_year_metrics, x='composite_score', 
+                                 nbins=15, title="Distribution of Composite Scores")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Download option
+            csv_data = derived_metrics_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Derived Metrics",
+                data=csv_data,
+                file_name="derived_metrics.csv",
+                mime="text/csv"
+            )
+            
+        else:
+            st.warning("⚠️ No derived metrics could be calculated. Check if required base metrics exist.")
+
 
 def show_data_completeness_report(analyzer):
     """Generate comprehensive data completeness report"""
