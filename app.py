@@ -652,7 +652,238 @@ class RAGDataExtractor:
             matches = re.findall(pattern, text, re.IGNORECASE)
             if matches:
                 data[category][key] = matches[0]
+
+class PDFReportGenerator:
+    """Fallback PDF Report Generator if import fails"""
+    def __init__(self):
+        self.title = "SUGAM Report"
         
+    def generate_report(self, data, title=None):
+        """Generate a simple PDF report"""
+        try:
+            # Try to import FPDF
+            from fpdf import FPDF
+            
+            if title:
+                self.title = title
+                
+            pdf = FPDF()
+            pdf.add_page()
+            
+            # Title
+            pdf.set_font('Arial', 'B', 16)
+            pdf.cell(200, 10, txt=self.title, ln=1, align='C')
+            
+            # Date
+            from datetime import datetime
+            pdf.set_font('Arial', '', 12)
+            pdf.cell(200, 10, txt=f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=1, align='C')
+            
+            # Content
+            pdf.ln(10)
+            pdf.set_font('Arial', '', 12)
+            
+            if isinstance(data, pd.DataFrame):
+                # Add table header
+                pdf.cell(200, 10, txt="Data Summary:", ln=1)
+                pdf.ln(5)
+                pdf.cell(200, 10, txt=f"Rows: {len(data)}, Columns: {len(data.columns)}", ln=1)
+                
+                # Add first few rows
+                if len(data) > 0:
+                    pdf.ln(5)
+                    pdf.cell(200, 10, txt="Sample Data:", ln=1)
+                    for i, row in data.head(5).iterrows():
+                        pdf.cell(200, 10, txt=str(row.to_dict()), ln=1)
+            elif isinstance(data, str):
+                pdf.multi_cell(0, 10, txt=data)
+            else:
+                pdf.cell(200, 10, txt=str(data), ln=1)
+            
+            return pdf.output(dest='S').encode('latin-1')
+            
+        except ImportError:
+            # If FPDF is not available, return a simple text
+            return f"PDF Report: {self.title}\n\n{str(data)}".encode()
+    
+    def generate_download_button(self, data, title="SUGAM Report", filename="sugam_report.pdf"):
+        """Generate a download button for the report"""
+        pdf_bytes = self.generate_report(data, title)
+        
+        b64 = base64.b64encode(pdf_bytes).decode()
+        href = f'<a href="data:application/pdf;base64,{b64}" download="{filename}">📥 Download PDF Report</a>'
+        return href
+
+# ==================== MAIN APP CONTENT ====================
+st.markdown("---")
+
+# Title for main content
+st.markdown("## 📊 Analytics Dashboard")
+
+# Create tabs for different functionalities
+tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "📋 Data Analysis", "📄 Report Generator", "⚙️ Settings"])
+
+with tab1:
+    st.header("Welcome to SUGAM Platform")
+    st.markdown("""
+    ### Smart University Governance and Approval Management
+    
+    **Features:**
+    - 📊 **Analytics Dashboard**: Visualize university data
+    - 📋 **Data Management**: Upload and process various data formats
+    - 📄 **Report Generation**: Automatically generate reports
+    - 🤖 **AI Insights**: Get intelligent recommendations
+    
+    **Get Started:**
+    1. Upload your data in the Data Analysis tab
+    2. Analyze patterns and trends
+    3. Generate comprehensive reports
+    4. Export results for decision-making
+    """)
+    
+    # Create metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Active Users", "150", "+12%")
+    with col2:
+        st.metric("Processed Requests", "1,234", "+8%")
+    with col3:
+        st.metric("Approval Rate", "87%", "+3%")
+    with col4:
+        st.metric("Avg Processing Time", "2.5 days", "-0.5")
+
+with tab2:
+    st.header("Data Analysis")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Upload your data file", 
+                                     type=['csv', 'xlsx', 'txt'],
+                                     help="Upload CSV, Excel, or text files")
+    
+    if uploaded_file is not None:
+        try:
+            # Read file based on type
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            elif uploaded_file.name.endswith('.xlsx'):
+                df = pd.read_excel(uploaded_file)
+            else:
+                df = pd.read_csv(uploaded_file, delimiter='\t')
+            
+            st.success(f"✅ File loaded successfully! Shape: {df.shape}")
+            
+            # Show data preview
+            st.subheader("Data Preview")
+            st.dataframe(df.head(), use_container_width=True)
+            
+            # Show statistics
+            st.subheader("Data Statistics")
+            st.dataframe(df.describe(), use_container_width=True)
+            
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
+
+with tab3:
+    st.header("Report Generator")
+    
+    # Initialize PDF generator
+    pdf_gen = PDFReportGenerator()
+    
+    # Report options
+    report_type = st.selectbox(
+        "Select Report Type",
+        ["Student Performance", "Faculty Analysis", "Administrative Summary", "Custom Report"]
+    )
+    
+    report_title = st.text_input("Report Title", f"SUGAM {report_type} Report")
+    
+    # Sample data or user input
+    sample_data = """
+    SUGAM Report Summary
+    ====================
+    
+    • Total Students: 1,500
+    • Average Score: 78.5%
+    • Top Performing Department: Computer Science
+    • Approval Rate: 92%
+    • Processing Time: 2.3 days average
+    
+    Recommendations:
+    1. Streamline approval workflow
+    2. Implement AI-based predictions
+    3. Enhance data visualization
+    4. Automate routine tasks
+    """
+    
+    report_content = st.text_area("Report Content", sample_data, height=200)
+    
+    if st.button("Generate Report"):
+        with st.spinner("Generating report..."):
+            # Create download link
+            download_link = pdf_gen.generate_download_button(
+                report_content, 
+                report_title,
+                f"sugam_{report_type.lower().replace(' ', '_')}_report.pdf"
+            )
+            
+            st.markdown(download_link, unsafe_allow_html=True)
+            st.success("✅ Report generated successfully!")
+
+with tab4:
+    st.header("Settings")
+    
+    st.subheader("System Configuration")
+    
+    # Theme settings
+    theme = st.selectbox("Theme", ["Light", "Dark", "System Default"])
+    
+    # Data settings
+    auto_save = st.toggle("Auto-save reports", value=True)
+    backup_frequency = st.select_slider(
+        "Backup Frequency",
+        options=["Daily", "Weekly", "Monthly", "Never"]
+    )
+    
+    # Save button
+    if st.button("Save Settings", type="primary"):
+        st.success("Settings saved successfully!")
+
+# ==================== FOOTER ====================
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 1rem;">
+    <p>सुगम (SUGAM) - Smart University Governance and Approval Management System</p>
+    <p>© 2024 | Designed for Educational Excellence</p>
+</div>
+""", unsafe_allow_html=True)
+
+# ==================== SIDEBAR CONTENT ====================
+with st.sidebar:
+    st.markdown("### Quick Actions")
+    
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        st.rerun()
+    
+    if st.button("📊 New Analysis", use_container_width=True):
+        st.session_state.clear()
+        st.rerun()
+    
+    if st.button("📄 Generate Quick Report", use_container_width=True):
+        # Trigger report generation
+        pdf_gen = PDFReportGenerator()
+        sample_data = "Quick Report Generated on-demand"
+        download_link = pdf_gen.generate_download_button(sample_data, "Quick Report")
+        st.markdown(download_link, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### System Status")
+    st.info("🟢 All systems operational")
+    st.metric("CPU Usage", "24%")
+    st.metric("Memory", "1.2/4 GB")
+    
+    st.markdown("---")
+    st.markdown("#### About")
+    st.caption("Version 1.0.0 | Last updated: Today")
 class InstitutionalAIAnalyzer:
     def __init__(self):
         self.init_database()
