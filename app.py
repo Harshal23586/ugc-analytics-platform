@@ -445,6 +445,135 @@ class InstitutionalAIAnalyzer:
                 st.session_state.rag_initialized = True
         
             self.create_dummy_institution_users()    
+
+    def generate_comprehensive_historical_data(self) -> pd.DataFrame:
+        """Generate comprehensive historical data for 20 institutions over 10 years"""
+        np.random.seed(42)
+        n_institutions = 20  # Changed from 200 to 20
+        years_of_data = 10   # Changed from 5 to 10
+        
+        institutions_data = []
+        
+        for inst_id in range(1, n_institutions + 1):
+            base_quality = np.random.uniform(0.3, 0.9)
+            
+            # Generate data for each of the 10 years (2014-2023)
+            for year_offset in range(years_of_data):
+                year = 2023 - year_offset  # This will give 2023, 2022, 2021, ..., 2014
+                inst_trend = base_quality + (year_offset * 0.02)
+                
+                # Generate realistic data with proper distributions
+                naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
+                naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
+                naac_grade = np.random.choice(naac_grades, p=naac_probs)
+                
+                # NIRF Ranking - better institutions more likely to be ranked
+                if base_quality > 0.7 and np.random.random() < 0.8:
+                    nirf_rank = np.random.randint(1, 101)
+                elif base_quality > 0.5 and np.random.random() < 0.5:
+                    nirf_rank = np.random.randint(101, 201)
+                else:
+                    nirf_rank = None
+                
+                student_faculty_ratio = max(10, np.random.normal(20, 5))
+                phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
+                
+                # Research metrics with realistic distributions
+                publications = max(0, int(np.random.poisson(inst_trend * 30)))
+                research_grants = max(0, int(np.random.exponential(inst_trend * 500000)))
+                patents = np.random.poisson(inst_trend * 3)
+                
+                # Infrastructure scores
+                digital_infrastructure_score = max(1, min(10, np.random.normal(7, 1.5)))
+                library_volumes = max(1000, int(np.random.normal(20000, 10000)))
+                
+                # Governance scores
+                financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
+                compliance_score = max(1, min(10, np.random.normal(8, 1)))
+                
+                # Student development
+                placement_rate = max(40, min(98, np.random.normal(75, 10)))
+                higher_education_rate = max(5, min(50, np.random.normal(20, 8)))
+                
+                # Social impact
+                community_projects = np.random.poisson(inst_trend * 8)
+                
+                # Calculate performance score
+                faculty_count = max(1, np.random.randint(30, 150))
+                performance_score = self.calculate_performance_score({
+                    'naac_grade': naac_grade,
+                    'nirf_ranking': nirf_rank,
+                    'student_faculty_ratio': student_faculty_ratio,
+                    'phd_faculty_ratio': phd_faculty_ratio,
+                    'publications_per_faculty': publications / faculty_count,
+                    'research_grants': research_grants,
+                    'digital_infrastructure': digital_infrastructure_score,
+                    'financial_stability': financial_stability,
+                    'placement_rate': placement_rate,
+                    'community_engagement': community_projects
+                })
+                
+                institution_data = {
+                    'institution_id': f'INST_{inst_id:04d}',
+                    'institution_name': f'University/College {inst_id:03d}',
+                    'year': year,
+                    'institution_type': np.random.choice(['State University', 'Deemed University', 'Private University', 'Autonomous College'], p=[0.3, 0.2, 0.3, 0.2]),
+                    'state': np.random.choice(['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat'], p=[0.2, 0.15, 0.15, 0.1, 0.2, 0.1, 0.1]),
+                    'established_year': np.random.randint(1950, 2015),
+                    
+                    # Academic Metrics
+                    'naac_grade': naac_grade,
+                    'nirf_ranking': nirf_rank,
+                    'student_faculty_ratio': round(student_faculty_ratio, 1),
+                    'phd_faculty_ratio': round(phd_faculty_ratio, 3),
+                    
+                    # Research Metrics
+                    'research_publications': publications,
+                    'research_grants_amount': research_grants,
+                    'patents_filed': patents,
+                    'industry_collaborations': np.random.poisson(inst_trend * 6),
+                    
+                    # Infrastructure Metrics
+                    'digital_infrastructure_score': round(digital_infrastructure_score, 1),
+                    'library_volumes': library_volumes,
+                    'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
+                    
+                    # Governance Metrics
+                    'financial_stability_score': round(financial_stability, 1),
+                    'compliance_score': round(compliance_score, 1),
+                    'administrative_efficiency': round(max(1, min(10, np.random.normal(7.2, 1.1))), 1),
+                    
+                    # Student Development Metrics
+                    'placement_rate': round(placement_rate, 1),
+                    'higher_education_rate': round(higher_education_rate, 1),
+                    'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
+                    
+                    # Social Impact Metrics
+                    'community_projects': community_projects,
+                    'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
+                    'inclusive_education_index': round(max(1, min(10, np.random.normal(7.5, 1.2))), 1),
+                    
+                    # Government Schemes Participation
+                    'rusa_participation': np.random.choice([0, 1], p=[0.4, 0.6]),
+                    'nmeict_participation': np.random.choice([0, 1], p=[0.5, 0.5]),
+                    'fist_participation': np.random.choice([0, 1], p=[0.6, 0.4]),
+                    'dst_participation': np.random.choice([0, 1], p=[0.7, 0.3]),
+                    
+                    # Overall Performance
+                    'performance_score': round(performance_score, 2),
+                    'approval_recommendation': self.generate_approval_recommendation(performance_score),
+                    'risk_level': self.assess_risk_level(performance_score)
+                }
+                
+                institutions_data.append(institution_data)
+        
+        df = pd.DataFrame(institutions_data)
+        
+        # Log the data dimensions
+        print(f"✅ Generated data for {df['institution_id'].nunique()} institutions across {df['year'].nunique()} years")
+        print(f"📊 Total records: {len(df)} | Years: {df['year'].min()}-{df['year'].max()}")
+        
+        return df
         
     def init_database(self):
         """Initialize SQLite database for storing institutional data"""
@@ -809,17 +938,30 @@ class InstitutionalAIAnalyzer:
         return risk_factors
     
     def load_or_generate_data(self):
-        """Load data from database or generate sample data"""
+        """Load data from database or generate sample data with 20×10 specification"""
         try:
             # Try to load from database
             df = pd.read_sql('SELECT * FROM institutions', self.conn)
             if len(df) > 0:
+                # Verify the loaded data matches 20×10 specification
+                unique_institutions = df['institution_id'].nunique()
+                unique_years = df['year'].nunique()
+                
+                print(f"📊 Loaded data: {unique_institutions} institutions, {unique_years} years, {len(df)} records")
+                
+                # If data doesn't match 20×10, regenerate
+                if unique_institutions != 20 or unique_years != 10:
+                    print("⚠️ Data doesn't match 20×10 specification. Regenerating...")
+                    df = self.generate_comprehensive_historical_data()
+                    df.to_sql('institutions', self.conn, if_exists='replace', index=False)
+                
                 return df
         except:
             pass
         
         # Generate sample data if database is empty
-        sample_data = self.generate_comprehensive_dummy_data()
+        print("🔄 Generating new 20×10 sample data...")
+        sample_data = self.generate_comprehensive_historical_data()
         sample_data.to_sql('institutions', self.conn, if_exists='replace', index=False)
         return sample_data
     
@@ -4290,6 +4432,21 @@ def main():
     # Initialize analytics engine with error handling
     try:
         analyzer = InstitutionalAIAnalyzer()
+        
+        # Verify data specifications
+        total_institutions = analyzer.historical_data['institution_id'].nunique()
+        total_years = analyzer.historical_data['year'].nunique()
+        total_records = len(analyzer.historical_data)
+        
+        st.sidebar.success(f"📊 Data: {total_institutions} institutes × {total_years} years")
+        st.sidebar.info(f"📈 Total Records: {total_records}")
+        
+        # Show data verification
+        if total_institutions == 20 and total_years == 10 and total_records == 200:
+            st.sidebar.success("✅ 20×10 specification verified")
+        else:
+            st.sidebar.warning(f"⚠️ Data mismatch: Expected 20×10=200, Got {total_institutions}×{total_years}={total_records}")
+            
     except Exception as e:
         st.error(f"❌ System initialization error: {str(e)}")
         st.stop()
