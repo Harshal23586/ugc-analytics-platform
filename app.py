@@ -3711,37 +3711,125 @@ def create_institutional_intelligence_hub(analyzer):
     # Institution selection
     current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
     
-    col1, col2 = st.columns([2, 1])
+    selected_institution = st.selectbox(
+        "Select Institution for Deep Analysis",
+        current_institutions,
+        key="intel_hub_institution"
+    )
     
-    with col1:
-        selected_institution = st.selectbox(
-            "Select Institution for Deep Analysis",
-            current_institutions,
-            key="intel_hub_institution"
-        )
-        
-        # Get comprehensive data
-        institution_data = get_comprehensive_institution_data(selected_institution, analyzer)
-        
-        if institution_data:
-            display_intelligence_dashboard(institution_data, analyzer)
+    # Get comprehensive data
+    institution_data = get_comprehensive_institution_data(selected_institution, analyzer)
     
-    with col2:
-        st.subheader("🚀 Quick Actions")
+    if institution_data:
+        display_intelligence_dashboard(institution_data, analyzer)
+    
+    # Add comparative analysis section
+    st.subheader("🏛️ Peer Comparison")
+    
+    if st.button("📊 Generate Comparative Analysis", type="secondary"):
+        show_comparative_analysis_safe(selected_institution, analyzer)
+    
+    # Add improvement roadmap
+    st.subheader("🎯 Improvement Strategy")
+    
+    if st.button("🔄 Generate Improvement Roadmap", type="secondary"):
+        show_improvement_roadmap_safe(selected_institution, analyzer)
+
+def show_improvement_roadmap_safe(institution_id, analyzer):
+    """Safe version of improvement roadmap"""
+    try:
+        # Get institution data
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        current_data = current_year_data[current_year_data['institution_id'] == institution_id]
         
-        if st.button("📊 Generate Comparative Analysis"):
-            show_comparative_analysis(selected_institution, analyzer)
+        if current_data.empty:
+            st.warning("No data available for institution")
+            return
         
-        if st.button("🎯 Generate Improvement Roadmap"):
-            show_improvement_roadmap(selected_institution, analyzer)
+        current = current_data.iloc[0].to_dict()
         
-        st.divider()
+        # Create roadmap
+        roadmap = [
+            {"Priority": "High", "Action": "Review and update curriculum", "Timeline": "3 months", "Impact": "High"},
+            {"Priority": "High", "Action": "Faculty development programs", "Timeline": "6 months", "Impact": "High"},
+            {"Priority": "Medium", "Action": "Enhance research infrastructure", "Timeline": "9 months", "Impact": "Medium"},
+            {"Priority": "Medium", "Action": "Improve digital learning facilities", "Timeline": "6 months", "Impact": "Medium"},
+            {"Priority": "High", "Action": "Strengthen industry partnerships", "Timeline": "4 months", "Impact": "High"},
+        ]
         
-        st.subheader("🔍 Advanced Analytics")
-        analytics_type = st.selectbox(
-            "Select Analysis Type",
-            ["Trend Analysis", "Peer Benchmarking", "Risk Assessment", "Gap Analysis"]
-        )
+        # Add specific actions based on weaknesses
+        weaknesses = get_institutional_weaknesses(current)
+        
+        if "High student-faculty ratio" in str(weaknesses):
+            roadmap.append({"Priority": "Critical", "Action": "Recruit additional faculty", "Timeline": "6 months", "Impact": "High"})
+        
+        if "Low placement rate" in str(weaknesses):
+            roadmap.append({"Priority": "Critical", "Action": "Enhance placement services", "Timeline": "3 months", "Impact": "High"})
+        
+        df_roadmap = pd.DataFrame(roadmap)
+        st.dataframe(df_roadmap, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Error generating roadmap: {str(e)}")
+
+
+
+def show_comparative_analysis_safe(institution_id, analyzer):
+    """Safe version of comparative analysis"""
+    try:
+        # Get current institution data
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        current_data = current_year_data[current_year_data['institution_id'] == institution_id]
+        
+        if current_data.empty:
+            st.warning("No data available for current institution")
+            return
+        
+        current_row = current_data.iloc[0]
+        
+        # Get peer institutions
+        peer_data = current_year_data[
+            (current_year_data['institution_type'] == current_row['institution_type']) &
+            (current_year_data['institution_id'] != institution_id)
+        ]
+        
+        if peer_data.empty:
+            st.info("No peer institutions found for comparison")
+            return
+        
+        # Create comparison table
+        comparison = [{
+            'Institution': f"📍 {current_row['institution_name']}",
+            'Type': current_row['institution_type'],
+            'Performance': current_row['performance_score'],
+            'NAAC Grade': current_row.get('naac_grade', 'N/A'),
+            'Placement %': current_row.get('placement_rate', 0)
+        }]
+        
+        # Add top 3 peers
+        top_peers = peer_data.nlargest(3, 'performance_score')
+        for _, peer in top_peers.iterrows():
+            comparison.append({
+                'Institution': peer['institution_name'],
+                'Type': peer['institution_type'],
+                'Performance': peer['performance_score'],
+                'NAAC Grade': peer.get('naac_grade', 'N/A'),
+                'Placement %': peer.get('placement_rate', 0)
+            })
+        
+        df_comparison = pd.DataFrame(comparison)
+        st.dataframe(df_comparison, use_container_width=True)
+        
+        # Performance percentile
+        all_scores = peer_data['performance_score'].tolist() + [current_row['performance_score']]
+        percentile = (sum(1 for s in all_scores if s < current_row['performance_score']) / len(all_scores)) * 100
+        st.metric("Performance Percentile", f"{percentile:.1f}%")
+        
+    except Exception as e:
+        st.error(f"Error in comparative analysis: {str(e)}")
+
+
+
 
 def show_improvement_roadmap(institution_id, analyzer):
     """Show improvement roadmap"""
@@ -3845,43 +3933,38 @@ def display_intelligence_dashboard(data, analyzer):
     with col1:
         performance_score = current.get('performance_score', 0)
         if performance_score >= 8.0:
-            st.success(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐⭐⭐")
+            st.success(f"**Performance**: {performance_score:.1f}/10")
         elif performance_score >= 6.0:
-            st.info(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐⭐")
+            st.info(f"**Performance**: {performance_score:.1f}/10")
         else:
-            st.warning(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐")
+            st.warning(f"**Performance**: {performance_score:.1f}/10")
     
     with col2:
         risk_level = current.get('risk_level', 'Medium Risk')
         if risk_level == "Low Risk":
-            st.success(f"**Risk**: {risk_level} ✅")
+            st.success(f"**Risk**: {risk_level}")
         elif risk_level == "Medium Risk":
-            st.info(f"**Risk**: {risk_level} ⚠️")
+            st.info(f"**Risk**: {risk_level}")
         else:
-            st.error(f"**Risk**: {risk_level} 🚨")
+            st.error(f"**Risk**: {risk_level}")
     
     with col3:
         approval_status = current.get('approval_recommendation', 'Under Review')
-        if "Full Approval" in approval_status:
-            st.success(f"**Approval**: {approval_status}")
-        elif "Provisional" in approval_status:
-            st.info(f"**Approval**: {approval_status}")
-        else:
-            st.error(f"**Approval**: {approval_status}")
+        st.metric("Approval Status", approval_status)
     
     with col4:
-        # Document compliance rate
+        # Document compliance
         docs = data['documents']
         if not docs.empty:
-            total_docs = len(docs)
-            uploaded_docs = len(docs[docs['status'] == 'Uploaded'])
-            compliance_rate = (uploaded_docs / total_docs * 100) if total_docs > 0 else 0
-            st.metric("Document Compliance", f"{compliance_rate:.1f}%")
+            uploaded = len(docs[docs['status'] == 'Uploaded'])
+            total = len(docs)
+            compliance = (uploaded / total * 100) if total > 0 else 0
+            st.metric("Doc Compliance", f"{compliance:.0f}%")
         else:
-            st.metric("Document Compliance", "0%")
+            st.metric("Doc Compliance", "0%")
     
-    # Performance Trend Analysis
-    st.subheader("📈 Performance Trend Analysis")
+    # Performance Trend
+    st.subheader("📈 Performance Trend (2014-2023)")
     
     historical = data['historical']
     if len(historical) > 1:
@@ -3889,91 +3972,122 @@ def display_intelligence_dashboard(data, analyzer):
             historical,
             x='year',
             y='performance_score',
-            title=f"Performance Trend ({historical['year'].min()}-{historical['year'].max()})",
-            markers=True
-        )
-        fig.update_layout(
-            xaxis_title="Year",
-            yaxis_title="Performance Score",
-            showlegend=False
+            markers=True,
+            title=f"Performance Trend: {historical['year'].min()}-{historical['year'].max()}"
         )
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Insufficient historical data for trend analysis")
     
-    # AI-Powered Insights
-    st.subheader("🤖 AI-Powered Strategic Insights")
+    # Key Metrics
+    st.subheader("📊 Key Performance Indicators")
     
-    insights_tabs = st.tabs(["Strengths", "Weaknesses", "Opportunities", "Recommendations"])
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
     
-    with insights_tabs[0]:
-        strengths = identify_institutional_strengths(current)
-        if strengths:
-            for strength in strengths:
-                st.success(f"✅ {strength}")
-        else:
-            st.info("No significant strengths identified")
+    with kpi_col1:
+        placement = current.get('placement_rate', 0)
+        st.metric("Placement Rate", f"{placement:.1f}%")
     
-    with insights_tabs[1]:
-        weaknesses = identify_institutional_weaknesses(current)
-        if weaknesses:
-            for weakness in weaknesses:
-                st.error(f"❌ {weakness}")
-        else:
-            st.success("No major weaknesses identified")
+    with kpi_col2:
+        research = current.get('research_publications', 0)
+        st.metric("Research Papers", research)
     
-    with insights_tabs[2]:
-        opportunities = identify_opportunities(current)
-        if opportunities:
-            for opportunity in opportunities:
-                st.info(f"💡 {opportunity}")
-        else:
-            st.info("Explore new government schemes and collaborations")
+    with kpi_col3:
+        sf_ratio = current.get('student_faculty_ratio', 0)
+        st.metric("Student-Faculty Ratio", f"{sf_ratio:.1f}")
     
-    with insights_tabs[3]:
-        recommendations = generate_ai_recommendations_simple(current)
-        for rec in recommendations[:3]:
-            st.write(f"• **{rec}**")
+    with kpi_col4:
+        naac = current.get('naac_grade', 'N/A')
+        st.metric("NAAC Grade", naac)
     
-    # Quick Metrics Dashboard
-    st.subheader("📊 Key Metrics Dashboard")
+    # AI Insights
+    st.subheader("🤖 AI-Powered Insights")
     
-    metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+    tab1, tab2, tab3 = st.tabs(["Strengths", "Areas for Improvement", "Recommendations"])
     
-    with metrics_col1:
-        placement_rate = current.get('placement_rate', 0)
-        st.metric("Placement Rate", f"{placement_rate:.1f}%")
+    with tab1:
+        strengths = get_institutional_strengths(current)
+        for strength in strengths:
+            st.success(f"✅ {strength}")
     
-    with metrics_col2:
-        research_pubs = current.get('research_publications', 0)
-        st.metric("Research Publications", research_pubs)
+    with tab2:
+        weaknesses = get_institutional_weaknesses(current)
+        for weakness in weaknesses:
+            st.error(f"❌ {weakness}")
     
-    with metrics_col3:
-        faculty_ratio = current.get('student_faculty_ratio', 0)
-        st.metric("Student-Faculty Ratio", f"{faculty_ratio:.1f}")
+    with tab3:
+        recommendations = get_ai_recommendations(current)
+        for rec in recommendations:
+            st.info(f"💡 {rec}")
+
+def get_ai_recommendations(data):
+    """Get AI recommendations"""
+    recommendations = []
     
-    with metrics_col4:
-        naac_grade = current.get('naac_grade', 'Not Accredited')
-        st.metric("NAAC Grade", naac_grade)
+    sf_ratio = data.get('student_faculty_ratio', 0)
+    if sf_ratio > 25:
+        recommendations.append("Recruit additional faculty to improve student-faculty ratio")
     
-    # Document Status Summary
-    st.subheader("📋 Document Status Summary")
+    placement = data.get('placement_rate', 0)
+    if placement < 70:
+        recommendations.append("Strengthen industry partnerships and career services")
     
-    docs = data['documents']
-    if not docs.empty:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            uploaded_count = len(docs[docs['status'] == 'Uploaded'])
-            total_count = len(docs)
-            st.metric("Documents Uploaded", f"{uploaded_count}/{total_count}")
-        
-        with col2:
-            if total_count > 0:
-                completion_rate = (uploaded_count / total_count) * 100
-                st.metric("Completion Rate", f"{completion_rate:.1f}%")
-    else:
-        st.warning("No document data available")
+    research = data.get('research_publications', 0)
+    if research < 30:
+        recommendations.append("Establish research promotion programs and incentives")
+    
+    if not data.get('nirf_ranking'):
+        recommendations.append("Participate in NIRF ranking for better visibility")
+    
+    return recommendations if recommendations else ["Institution is performing well across parameters"]
+
+
+
+def get_institutional_weaknesses(data):
+    """Get institutional weaknesses"""
+    weaknesses = []
+    
+    sf_ratio = data.get('student_faculty_ratio', 0)
+    if sf_ratio > 25:
+        weaknesses.append(f"High student-faculty ratio: {sf_ratio:.1f}")
+    
+    placement = data.get('placement_rate', 0)
+    if placement < 65:
+        weaknesses.append(f"Low placement rate: {placement:.1f}%")
+    
+    research = data.get('research_publications', 0)
+    if research < 20:
+        weaknesses.append(f"Limited research output: {research} publications")
+    
+    digital = data.get('digital_infrastructure_score', 0)
+    if digital < 7:
+        weaknesses.append(f"Weak digital infrastructure: {digital:.1f}/10")
+    
+    return weaknesses if weaknesses else ["No major weaknesses identified"]
+
+
+
+def get_institutional_strengths(data):
+    """Get institutional strengths"""
+    strengths = []
+    
+    naac = data.get('naac_grade', '')
+    if naac in ['A++', 'A+', 'A']:
+        strengths.append(f"Strong NAAC accreditation: {naac}")
+    
+    placement = data.get('placement_rate', 0)
+    if placement > 80:
+        strengths.append(f"Excellent placement rate: {placement:.1f}%")
+    
+    financial = data.get('financial_stability_score', 0)
+    if financial > 8.0:
+        strengths.append(f"Strong financial stability: {financial:.1f}/10")
+    
+    research = data.get('research_publications', 0)
+    if research > 50:
+        strengths.append(f"Robust research output: {research} publications")
+    
+    return strengths if strengths else ["No significant strengths identified"]
+
+
 
 def generate_ai_recommendations_simple(institution_data):
     """Generate AI-powered improvement recommendations"""
@@ -4119,34 +4233,36 @@ def identify_institutional_strengths(institution_data):
 def get_comprehensive_institution_data(institution_id, analyzer):
     """Get comprehensive data for intelligence analysis"""
     try:
-        # Get current year data
-        current_data = analyzer.historical_data[
-            (analyzer.historical_data['institution_id'] == institution_id) &
-            (analyzer.historical_data['year'] == 2023)
-        ]
+        # Get current year data (2023)
+        current_year_data = analyzer.historical_data[analyzer.historical_data['year'] == 2023]
+        
+        current_data = current_year_data[current_year_data['institution_id'] == institution_id]
         
         if current_data.empty:
-            st.warning("No current year data found for this institution")
+            st.warning(f"No current year data found for institution {institution_id}")
             return None
         
-        # Get historical trend (10 years)
+        # Get historical data
         historical_data = analyzer.historical_data[
             analyzer.historical_data['institution_id'] == institution_id
-        ]
+        ].sort_values('year')
         
-        # Get document status
-        document_status = analyzer.get_institution_documents(institution_id)
+        # Get document data
+        try:
+            document_data = analyzer.get_institution_documents(institution_id)
+        except:
+            document_data = pd.DataFrame()
         
         return {
             'current': current_data.iloc[0].to_dict(),
             'historical': historical_data,
-            'documents': document_status,
+            'documents': document_data,
             'institution_id': institution_id
         }
+        
     except Exception as e:
-        st.error(f"Error loading institution data: {e}")
+        st.error(f"Error loading institution data: {str(e)}")
         return None
-
 
 
 def create_data_management_module(analyzer):
