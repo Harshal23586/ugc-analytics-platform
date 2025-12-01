@@ -501,6 +501,7 @@ class InstitutionalAIAnalyzer:
                 
                 # Calculate performance score
                 faculty_count = max(1, np.random.randint(30, 150))
+                
                 performance_score = self.calculate_performance_score({
                     'naac_grade': naac_grade,
                     'nirf_ranking': nirf_rank,
@@ -1137,55 +1138,66 @@ class InstitutionalAIAnalyzer:
         ''', self.conn, params=(institution_id,))
 
     
-    def calculate_performance_score(row):
-        """Calculate performance score for a single institution row"""
-        score = 5.0  # Base score
+    def calculate_performance_score(self, *args, **kwargs) -> float:
+    """Calculate overall performance score based on weighted metrics"""
     
-        # NAAC Grade scoring
-        naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
-        naac_score = naac_scores.get(row.get('naac_grade'), 5)
-        score += naac_score * 0.15
+    # Handle different calling patterns
+    if len(args) == 1 and isinstance(args[0], dict):
+        metrics = args[0]
+    elif kwargs:
+        metrics = kwargs
+    else:
+        # Default metrics if nothing provided
+        return 5.0
     
-        # NIRF Ranking scoring (inverse)
-        nirf_rank = row.get('nirf_ranking')
-        if nirf_rank and nirf_rank <= 200:
-            nirf_score = (201 - nirf_rank) / 200 * 10
-            score += nirf_score * 0.10
+    score = 0
     
-        # Student-Faculty Ratio (lower is better)
-        sf_ratio = row.get('student_faculty_ratio', 20)
-        sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
-        score += sf_ratio_score * 0.10
+    # NAAC Grade scoring
+    naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
+    naac_score = naac_scores.get(metrics.get('naac_grade'), 5)
+    score += naac_score * 0.15
     
-        # PhD Faculty Ratio
-        phd_ratio = row.get('phd_faculty_ratio', 0.6)
-        phd_score = phd_ratio * 10
-        score += phd_score * 0.10
+    # NIRF Ranking scoring (inverse)
+    nirf_score = 0
+    if metrics.get('nirf_ranking') and metrics['nirf_ranking'] <= 200:
+        nirf_score = (201 - metrics['nirf_ranking']) / 200 * 10
+    score += nirf_score * 0.10
     
-        # Research Publications
-        publications = row.get('research_publications', 0)
-        pub_score = min(10, publications / 10)  # 100 publications = 10 points
-        score += pub_score * 0.10
+    # Student-Faculty Ratio (lower is better)
+    sf_ratio = metrics.get('student_faculty_ratio', 20)
+    sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
+    score += sf_ratio_score * 0.10
     
-        # Digital Infrastructure
-        digital_score = row.get('digital_infrastructure_score', 7)
-        score += digital_score * 0.10
+    # PhD Faculty Ratio
+    phd_score = metrics.get('phd_faculty_ratio', 0.6) * 10
+    score += phd_score * 0.10
     
-        # Financial Stability
-        financial_score = row.get('financial_stability_score', 7.5)
-        score += financial_score * 0.10
+    # Research Publications per faculty
+    pub_per_faculty = metrics.get('publications_per_faculty', 0)
+    pub_score = min(10, pub_per_faculty * 3)
+    score += pub_score * 0.10
     
-        # Placement Rate
-        placement = row.get('placement_rate', 75)
-        placement_score = placement / 10
-        score += placement_score * 0.15
+    # Research Grants (log scale)
+    grant_score = min(10, np.log1p(metrics.get('research_grants', 0) / 100000) * 2.5)
+    score += grant_score * 0.10
     
-        # Community Engagement
-        community = row.get('community_projects', 0)
-        community_score = min(10, community / 2)  # 20 projects = 10 points
-        score += community_score * 0.10
+    # Infrastructure
+    infra_score = metrics.get('digital_infrastructure', 7)
+    score += infra_score * 0.10
     
-        return min(10, max(1, score))
+    # Financial Stability
+    financial_score = metrics.get('financial_stability', 7.5)
+    score += financial_score * 0.10
+    
+    # Placement Rate
+    placement_score = metrics.get('placement_rate', 70) / 10
+    score += placement_score * 0.10
+    
+    # Community Engagement
+    community_score = min(10, metrics.get('community_engagement', 0) / 1.5)
+    score += community_score * 0.05
+    
+    return min(10, score)
     
     def generate_approval_recommendation(self, performance_score: float) -> str:
         """Generate approval recommendation based on performance score"""
