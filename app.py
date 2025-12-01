@@ -2852,7 +2852,13 @@ def create_institution_requirements_guide(analyzer):
 def create_performance_dashboard(analyzer):
     st.header("📊 Institutional Performance Analytics Dashboard")
     
+    # Use the actual data from analyzer (should be 20 institutions × 10 years)
     df = analyzer.historical_data
+    
+    # Show data specification at the top
+    st.info(f"📊 **Data Overview**: {df['institution_id'].nunique()} Institutions × {df['year'].nunique()} Years ({df['year'].min()}-{df['year'].max()}) | Total Records: {len(df)}")
+    
+    # Filter for current year data only for KPI calculations
     current_year_data = df[df['year'] == 2023]
     
     # Ensure we have data
@@ -2861,7 +2867,7 @@ def create_performance_dashboard(analyzer):
         return
     
     # Key Performance Indicators
-    st.subheader("🏆 Key Performance Indicators")
+    st.subheader("🏆 Key Performance Indicators (2023 Data)")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -2883,21 +2889,21 @@ def create_performance_dashboard(analyzer):
         st.metric("Average Placement Rate", f"{avg_placement:.1f}%")
     
     with col5:
-        research_intensity = current_year_data['research_publications'].sum() / current_year_data['research_publications'].count()
+        research_intensity = current_year_data['research_publications'].sum() / len(current_year_data)
         st.metric("Avg Research Publications", f"{research_intensity:.1f}")
     
     # Performance Analysis
-    st.subheader("📈 Performance Analysis")
+    st.subheader("📈 Performance Analysis (20 Institutions)")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Performance Distribution
+        # Performance Distribution for current year
         fig1 = px.histogram(
             current_year_data, 
             x='performance_score',
-            title="Distribution of Institutional Performance Scores",
-            nbins=20,
+            title="Distribution of Institutional Performance Scores (2023)",
+            nbins=12,
             color_discrete_sequence=['#1f77b4'],
             opacity=0.8
         )
@@ -2914,7 +2920,7 @@ def create_performance_dashboard(analyzer):
             current_year_data,
             x='institution_type',
             y='performance_score',
-            title="Performance Score by Institution Type",
+            title="Performance Score by Institution Type (2023)",
             color='institution_type'
         )
         fig2.update_layout(
@@ -2924,9 +2930,10 @@ def create_performance_dashboard(analyzer):
         )
         st.plotly_chart(fig2, use_container_width=True)
     
-    # Trend Analysis
-    st.subheader("📅 Historical Performance Trends")
+    # Trend Analysis - Show all 10 years for the 20 institutions
+    st.subheader("📅 Historical Performance Trends (2014-2023)")
     
+    # Calculate average performance by year and type
     trend_data = df.groupby(['year', 'institution_type'])['performance_score'].mean().reset_index()
     
     fig3 = px.line(
@@ -2934,7 +2941,7 @@ def create_performance_dashboard(analyzer):
         x='year',
         y='performance_score',
         color='institution_type',
-        title="Average Performance Score Trend (2019-2023)",
+        title="Average Performance Score Trend (2014-2023) - 20 Institutions",
         markers=True
     )
     fig3.update_layout(
@@ -2945,7 +2952,7 @@ def create_performance_dashboard(analyzer):
     st.plotly_chart(fig3, use_container_width=True)
     
     # Risk Analysis
-    st.subheader("⚠️ Institutional Risk Analysis")
+    st.subheader("⚠️ Institutional Risk Analysis (2023)")
     
     col1, col2 = st.columns(2)
     
@@ -2974,7 +2981,7 @@ def create_performance_dashboard(analyzer):
             color='risk_level',
             size='performance_score',
             hover_data=['institution_name'],
-            title="Research Output vs Placement Rate",
+            title="Research Output vs Placement Rate (2023)",
             color_discrete_map={
                 'Low Risk': '#2ecc71',
                 'Medium Risk': '#f39c12',
@@ -2988,44 +2995,101 @@ def create_performance_dashboard(analyzer):
         )
         st.plotly_chart(fig5, use_container_width=True)
     
-    # Additional Visualizations
-    st.subheader("🎯 Additional Insights")
+    # Additional Visualizations focused on 20 institutions
+    st.subheader("🎯 Performance Insights - 20 Institutions Analysis")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # State-wise Performance
-        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False).head(10)
+        # Top 10 performing institutions
+        top_performers = current_year_data.nlargest(10, 'performance_score')[['institution_name', 'performance_score', 'naac_grade']]
         fig6 = px.bar(
-            x=state_performance.index,
-            y=state_performance.values,
-            title="Top 10 States by Average Performance Score",
-            color=state_performance.values,
+            top_performers,
+            x='performance_score',
+            y='institution_name',
+            orientation='h',
+            title="Top 10 Performing Institutions (2023)",
+            color='performance_score',
             color_continuous_scale='Viridis'
         )
         fig6.update_layout(
-            xaxis_title="State",
-            yaxis_title="Average Performance Score",
-            showlegend=False
+            yaxis_title="Institution",
+            xaxis_title="Performance Score"
         )
         st.plotly_chart(fig6, use_container_width=True)
     
     with col2:
-        # NAAC Grade Distribution
-        naac_dist = current_year_data['naac_grade'].value_counts()
+        # State-wise Performance
+        state_performance = current_year_data.groupby('state')['performance_score'].mean().sort_values(ascending=False)
         fig7 = px.bar(
-            x=naac_dist.index,
-            y=naac_dist.values,
-            title="NAAC Grade Distribution",
-            color=naac_dist.index,
-            color_discrete_sequence=px.colors.qualitative.Set3
+            x=state_performance.index,
+            y=state_performance.values,
+            title="States by Average Performance Score (2023)",
+            color=state_performance.values,
+            color_continuous_scale='Viridis'
         )
         fig7.update_layout(
-            xaxis_title="NAAC Grade",
-            yaxis_title="Number of Institutions",
+            xaxis_title="State",
+            yaxis_title="Average Performance Score",
             showlegend=False
         )
         st.plotly_chart(fig7, use_container_width=True)
+    
+    # Comprehensive Data Table
+    st.subheader("📋 Institutional Performance Data (2023)")
+    
+    # Show key metrics for all 20 institutions
+    display_columns = [
+        'institution_id', 'institution_name', 'institution_type', 'state',
+        'performance_score', 'naac_grade', 'placement_rate', 'risk_level',
+        'approval_recommendation'
+    ]
+    
+    st.dataframe(
+        current_year_data[display_columns].sort_values('performance_score', ascending=False),
+        use_container_width=True,
+        height=400
+    )
+    
+    # Institution Comparison Tool
+    st.subheader("🔍 Compare Institutions")
+    
+    # Select institutions to compare
+    institutions_list = current_year_data['institution_name'].tolist()
+    selected_institutions = st.multiselect(
+        "Select institutions to compare:",
+        institutions_list,
+        default=institutions_list[:3] if len(institutions_list) >= 3 else institutions_list
+    )
+    
+    if selected_institutions:
+        comparison_data = current_year_data[current_year_data['institution_name'].isin(selected_institutions)]
+        
+        # Create comparison chart
+        fig8 = px.bar(
+            comparison_data,
+            x='institution_name',
+            y=['performance_score', 'placement_rate', 'research_publications'],
+            title="Institution Comparison",
+            barmode='group'
+        )
+        fig8.update_layout(
+            xaxis_title="Institution",
+            yaxis_title="Score/Percentage/Count"
+        )
+        st.plotly_chart(fig8, use_container_width=True)
+        
+        # Show detailed comparison table
+        comparison_cols = [
+            'institution_name', 'performance_score', 'naac_grade', 'nirf_ranking',
+            'placement_rate', 'research_publications', 'student_faculty_ratio',
+            'financial_stability_score', 'risk_level'
+        ]
+        st.dataframe(
+            comparison_data[comparison_cols].set_index('institution_name'),
+            use_container_width=True
+        )
+
 
 def create_document_analysis_module(analyzer):
     st.header("📋 AI-Powered Document Sufficiency Analysis")
@@ -3813,134 +3877,82 @@ def create_data_management_module(analyzer):
     with tab2:
         st.subheader("Current Database Contents")
         
-        # Generate comprehensive dummy data that matches both form structures
-        dummy_data = generate_comprehensive_dummy_data()
+        # Use the actual data from analyzer
+        current_data = analyzer.historical_data
         
-        # Show database statistics
+        # Show database statistics with specification verification
+        st.subheader("✅ Database Specification Verification")
+        
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            total_records = len(dummy_data)
-            st.metric("Total Records", f"{total_records:,}")
-        with col2:
-            unique_institutions = dummy_data['institution_id'].nunique()
-            st.metric("Unique Institutions", unique_institutions)
-        with col3:
-            years_covered = f"{dummy_data['year'].min()}-{dummy_data['year'].max()}"
-            st.metric("Years Covered", years_covered)
-        with col4:
-            current_year_data = len(dummy_data[dummy_data['year'] == 2023])
-            st.metric("Current Year Records", current_year_data)
+            total_records = len(current_data)
+            expected_records = 200  # 20 institutions × 10 years
+            status = "✅ PASS" if total_records == expected_records else "❌ FAIL"
+            st.metric("Total Records", f"{total_records}", delta=f"Expected: {expected_records}")
         
-        # Performance Overview
-        st.subheader("📊 Performance Overview")
+        with col2:
+            unique_institutions = current_data['institution_id'].nunique()
+            expected_institutions = 20
+            status = "✅ PASS" if unique_institutions == expected_institutions else "❌ FAIL"
+            st.metric("Unique Institutions", f"{unique_institutions}", delta=f"Expected: {expected_institutions}")
+        
+        with col3:
+            years_covered = current_data['year'].nunique()
+            expected_years = 10
+            status = "✅ PASS" if years_covered == expected_years else "❌ FAIL"
+            st.metric("Years Covered", f"{years_covered}", delta=f"Expected: {expected_years}")
+        
+        with col4:
+            year_range = f"{current_data['year'].min()}-{current_data['year'].max()}"
+            expected_range = "2014-2023"
+            status = "✅ PASS" if year_range == expected_range else "❌ FAIL"
+            st.metric("Year Range", year_range, delta=f"Expected: {expected_range}")
+        
+        # Show current year overview
+        current_year_data = current_data[current_data['year'] == 2023]
+        
+        st.subheader("📊 2023 Institutional Overview")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            avg_performance = dummy_data['performance_score'].mean()
+            avg_performance = current_year_data['performance_score'].mean()
             st.metric("Avg Performance Score", f"{avg_performance:.2f}/10")
         
         with col2:
-            high_performers = len(dummy_data[dummy_data['performance_score'] >= 8.0])
+            high_performers = len(current_year_data[current_year_data['performance_score'] >= 8.0])
             st.metric("High Performers (8+ Score)", high_performers)
         
         with col3:
-            avg_placement = dummy_data['placement_rate'].mean()
+            avg_placement = current_year_data['placement_rate'].mean()
             st.metric("Avg Placement Rate", f"{avg_placement:.1f}%")
         
-        # Data preview with tabs for different views
-        st.subheader("📋 Data Preview")
+        # Data preview
+        st.subheader("📋 Data Preview (Current Year - 20 Institutions)")
         
-        data_tabs = st.tabs(["Institutional Overview", "Academic Metrics", "Research & Infrastructure", "Financial & Governance"])
+        display_columns = ['institution_id', 'institution_name', 'institution_type', 'state', 
+                          'performance_score', 'naac_grade', 'placement_rate', 'risk_level']
         
-        with data_tabs[0]:
-            st.write("**Basic Institutional Data**")
-            overview_cols = ['institution_id', 'institution_name', 'institution_type', 'state', 
-                           'established_year', 'year', 'performance_score', 'approval_recommendation', 'risk_level']
-            st.dataframe(dummy_data[overview_cols].head(10), use_container_width=True)
-        
-        with data_tabs[1]:
-            st.write("**Academic Performance Metrics**")
-            academic_cols = ['institution_id', 'institution_name', 'naac_grade', 'nirf_ranking',
-                           'student_faculty_ratio', 'phd_faculty_ratio', 'placement_rate', 
-                           'higher_education_rate']
-            st.dataframe(dummy_data[academic_cols].head(10), use_container_width=True)
-        
-        with data_tabs[2]:
-            st.write("**Research & Infrastructure Metrics**")
-            research_cols = ['institution_id', 'institution_name', 'research_publications',
-                           'research_grants_amount', 'patents_filed', 'industry_collaborations',
-                           'digital_infrastructure_score', 'library_volumes']
-            st.dataframe(dummy_data[research_cols].head(10), use_container_width=True)
-        
-        with data_tabs[3]:
-            st.write("**Financial & Governance Metrics**")
-            financial_cols = ['institution_id', 'institution_name', 'financial_stability_score',
-                            'compliance_score', 'administrative_efficiency', 'community_projects',
-                            'entrepreneurship_cell_score']
-            st.dataframe(dummy_data[financial_cols].head(10), use_container_width=True)
-        
-        # Quick Analytics
-        st.subheader("📈 Quick Analytics")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Performance distribution
-            fig1 = px.histogram(dummy_data, x='performance_score', 
-                              title="Performance Score Distribution",
-                              nbins=20, color_discrete_sequence=['#1f77b4'])
-            st.plotly_chart(fig1, use_container_width=True)
-        
-        with col2:
-            # Institution type performance
-            type_performance = dummy_data.groupby('institution_type')['performance_score'].mean().sort_values(ascending=False)
-            fig2 = px.bar(x=type_performance.index, y=type_performance.values,
-                         title="Average Performance by Institution Type",
-                         color=type_performance.values,
-                         color_continuous_scale='Viridis')
-            fig2.update_layout(xaxis_title="Institution Type", yaxis_title="Average Performance Score")
-            st.plotly_chart(fig2, use_container_width=True)
-        
-        # Export data
-        st.subheader("📥 Export Data")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("📊 Export Summary Statistics"):
-                summary_stats = {
-                    'total_institutions': dummy_data['institution_id'].nunique(),
-                    'total_records': len(dummy_data),
-                    'years_covered': f"{dummy_data['year'].min()}-{dummy_data['year'].max()}",
-                    'avg_performance_score': dummy_data['performance_score'].mean(),
-                    'avg_placement_rate': dummy_data['placement_rate'].mean(),
-                    'total_research_publications': dummy_data['research_publications'].sum(),
-                    'high_performers_count': len(dummy_data[dummy_data['performance_score'] >= 8.0])
-                }
-                st.json(summary_stats)
-        
-        with col2:
-            csv = dummy_data.to_csv(index=False)
-            st.download_button(
-                label="📥 Download Full Dataset as CSV",
-                data=csv,
-                file_name="comprehensive_institutional_data.csv",
-                mime="text/csv"
-            )
+        st.dataframe(
+            current_year_data[display_columns].sort_values('performance_score', ascending=False),
+            use_container_width=True,
+            height=400
+        )
     
     with tab3:
         st.subheader("Database Management")
         
+        st.info("**Current Specification**: 20 Institutions × 10 Years (2014-2023) = 200 Total Records")
+        
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔄 Generate New Sample Data", help="Create fresh sample data with current parameters"):
+            if st.button("🔄 Regenerate 20×10 Data", help="Create fresh data with 20 institutions and 10 years"):
                 new_data = generate_comprehensive_dummy_data()
                 try:
                     new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
                     analyzer.historical_data = new_data
-                    st.success("✅ New sample data generated successfully!")
+                    st.success("✅ New 20×10 sample data generated successfully!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error generating data: {e}")
@@ -3956,23 +3968,6 @@ def create_data_management_module(analyzer):
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Error clearing data: {e}")
-        
-        # Database Info
-        st.subheader("Database Information")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("**Data Structure**")
-            st.write(f"• **Total Columns:** {len(dummy_data.columns)}")
-            st.write(f"• **Data Types:** Mixed (Numeric, Categorical, Text)")
-            st.write(f"• **Update Frequency:** Manual/On-demand")
-        
-        with col2:
-            st.info("**Coverage**")
-            st.write(f"• **Institution Types:** {', '.join(dummy_data['institution_type'].unique())}")
-            st.write(f"• **States Covered:** {dummy_data['state'].nunique()}")
-            st.write(f"• **Time Period:** {dummy_data['year'].min()} - {dummy_data['year'].max()}")
 
 def generate_comprehensive_dummy_data():
     """Generate comprehensive dummy data matching both Basic and Systematic form parameters"""
