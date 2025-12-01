@@ -7295,7 +7295,8 @@ def main():
             "🤖 Intelligence Hub",
             "🔍 RAG Data Management",
             "💾 Data Management",
-            # "🔄 Approval Workflow",  # REMOVED FROM THIS LIST
+            "📄 PDF Reports",
+            "🌐 API Integration",
             "⚙️ System Settings"
         ]
     )
@@ -7322,7 +7323,10 @@ def main():
     # Add to your main navigation in main() function:
     elif app_mode == "🌐 API Integration":
         create_api_documentation()
-   
+
+    # Add to routing logic:
+    elif app_mode == "📄 PDF Reports":
+        create_pdf_report_module(analyzer)
         
         st.subheader("System Information")
         col1, col2, col3 = st.columns(3)
