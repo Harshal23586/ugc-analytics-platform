@@ -1,7 +1,11 @@
-# Add to imports at the top of your main file:
-from report_generator import PDFReportGenerator
-
 # Add to InstitutionalAIAnalyzer __init__:
+
+# report_generator.py
+from fpdf import FPDF
+import pandas as pd
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
 class InstitutionalAIAnalyzer:
     def __init__(self):
         self.init_database()
