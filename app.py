@@ -3700,150 +3700,200 @@ def get_document_requirements_by_parameters(approval_type):
 
 
             
-def create_ai_analysis_reports(analyzer):
-    st.header("🤖 Comprehensive AI Analysis Reports")
+def create_institutional_intelligence_hub(analyzer):
+    st.header("🧠 Institutional Intelligence Hub")
     
-    df = analyzer.historical_data
-    current_institutions = df[df['year'] == 2023]['institution_id'].unique()
+    st.info("""
+    **Comprehensive AI-powered insights, predictive analytics, and strategic recommendations** 
+    for institutional excellence and NEP 2020 compliance.
+    """)
+    
+    # Institution selection
+    current_institutions = analyzer.historical_data[analyzer.historical_data['year'] == 2023]['institution_id'].unique()
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
         selected_institution = st.selectbox(
-            "Select Institution for Detailed Analysis",
-            current_institutions
+            "Select Institution for Deep Analysis",
+            current_institutions,
+            key="intel_hub_institution"
         )
         
-        if selected_institution:
-            # Generate comprehensive report
-            report = analyzer.generate_comprehensive_report(selected_institution)
-            
-            if "error" not in report:
-                st.subheader(f"🏛️ AI Analysis Report: {report['institution_info']['name']}")
-                
-                # Institution Overview
-                st.info("**Institution Overview**")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Type", report['institution_info']['type'])
-                with col2:
-                    st.metric("State", report['institution_info']['state'])
-                with col3:
-                    st.metric("Established", report['institution_info']['established'])
-                with col4:
-                    st.metric("Performance Score", f"{report['performance_analysis']['current_score']:.2f}/10")
-                
-                # Approval Recommendation with colored indicator
-                recommendation = report['performance_analysis']['approval_recommendation']
-                if "Full Approval" in recommendation:
-                    st.success(f"**✅ {recommendation}**")
-                elif "Provisional" in recommendation:
-                    st.warning(f"**🟡 {recommendation}**")
-                elif "Conditional" in recommendation or "Monitoring" in recommendation:
-                    st.error(f"**🟠 {recommendation}**")
-                else:
-                    st.error(f"**🔴 {recommendation}**")
-                
-                # Risk Level
-                risk_level = report['performance_analysis']['risk_level']
-                if risk_level == "Low Risk":
-                    st.success(f"**Risk Level: {risk_level}**")
-                elif risk_level == "Medium Risk":
-                    st.warning(f"**Risk Level: {risk_level}**")
-                else:
-                    st.error(f"**Risk Level: {risk_level}**")
-                
-                # Performance Trend
-                st.metric(
-                    "Performance Trend", 
-                    report['performance_analysis']['trend_analysis'],
-                    delta=report['performance_analysis']['trend_analysis'],
-                    delta_color="normal" if report['performance_analysis']['trend_analysis'] == "Improving" else "off" if report['performance_analysis']['trend_analysis'] == "Stable" else "inverse"
-                )
-                
-                # Strengths and Weaknesses
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if report['strengths']:
-                        st.success("**✅ Institutional Strengths**")
-                        for strength in report['strengths']:
-                            st.write(f"• {strength}")
-                    else:
-                        st.info("No significant strengths identified")
-                
-                with col2:
-                    if report['weaknesses']:
-                        st.error("**⚠️ Areas for Improvement**")
-                        for weakness in report['weaknesses']:
-                            st.write(f"• {weakness}")
-                    else:
-                        st.success("No major weaknesses identified")
-                
-                # AI Recommendations
-                if report['ai_recommendations']:
-                    st.warning("**🎯 AI Improvement Recommendations**")
-                    for recommendation in report['ai_recommendations']:
-                        st.write(f"• {recommendation}")
-                else:
-                    st.success("Institution is performing well across all parameters")
-                
-                # Comparative Analysis
-                st.info("**📊 Comparative Analysis**")
-                if report['comparative_analysis']:
-                    st.write(f"**Performance Percentile:** {report['comparative_analysis']['performance_percentile']:.1f}%")
-                    if report['comparative_analysis']['benchmark_institutions']:
-                        st.write("**Benchmark Institutions:**")
-                        for bench in report['comparative_analysis']['benchmark_institutions']:
-                            st.write(f"• **{bench['institution_name']}**: {bench['performance_score']:.2f} - {bench['approval_recommendation']}")
-                    else:
-                        st.info("No similar institutions found for comparison")
-                
-                # Historical Performance Chart
-                if len(report['performance_analysis']['historical_trend']) > 1:
-                    st.subheader("📈 Historical Performance Trend")
-                    trend_df = pd.DataFrame(list(report['performance_analysis']['historical_trend'].items()), 
-                                          columns=['Year', 'Performance Score'])
-                    fig = px.line(trend_df, x='Year', y='Performance Score', 
-                                title=f"Performance Trend for {report['institution_info']['name']}",
-                                markers=True)
-                    st.plotly_chart(fig, use_container_width=True)
+        # Get comprehensive data
+        institution_data = get_comprehensive_institution_data(selected_institution, analyzer)
+        
+        if institution_data:
+            display_intelligence_dashboard(institution_data, analyzer)
     
     with col2:
-        st.subheader("Quick Institutional Insights")
+        st.subheader("🚀 Quick Actions")
         
-        # Top performers
-        top_performers = df[df['year'] == 2023].nlargest(5, 'performance_score')[
-            ['institution_name', 'performance_score', 'approval_recommendation']
+        if st.button("📊 Generate Comparative Analysis"):
+            show_comparative_analysis(selected_institution, analyzer)
+        
+        if st.button("🎯 Generate Improvement Roadmap"):
+            show_improvement_roadmap(selected_institution, analyzer)
+        
+        if st.button("📈 Predict Future Performance"):
+            show_predictive_analysis(selected_institution, analyzer)
+        
+        st.divider()
+        
+        st.subheader("🔍 Advanced Analytics")
+        analytics_type = st.selectbox(
+            "Select Analysis Type",
+            ["Trend Analysis", "Peer Benchmarking", "Risk Assessment", "Gap Analysis", "Compliance Check"]
+        )
+def display_intelligence_dashboard(data, analyzer):
+    """Display comprehensive intelligence dashboard"""
+    
+    current = data['current']
+    
+    # Executive Summary
+    st.subheader("🎯 Executive Summary")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        performance_score = current['performance_score']
+        if performance_score >= 8.0:
+            st.success(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐⭐⭐")
+        elif performance_score >= 6.0:
+            st.info(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐⭐")
+        else:
+            st.warning(f"**Performance**: {performance_score:.1f}/10 ⭐⭐⭐")
+    
+    with col2:
+        risk_level = current['risk_level']
+        if risk_level == "Low Risk":
+            st.success(f"**Risk**: {risk_level} ✅")
+        elif risk_level == "Medium Risk":
+            st.info(f"**Risk**: {risk_level} ⚠️")
+        else:
+            st.error(f"**Risk**: {risk_level} 🚨")
+    
+    with col3:
+        approval_status = current['approval_recommendation']
+        if "Full Approval" in approval_status:
+            st.success(f"**Approval**: {approval_status}")
+        elif "Provisional" in approval_status:
+            st.info(f"**Approval**: {approval_status}")
+        else:
+            st.error(f"**Approval**: {approval_status}")
+    
+    with col4:
+        # Document compliance rate
+        docs = data['documents']
+        if not docs.empty:
+            total_docs = len(docs)
+            uploaded_docs = len(docs[docs['status'] == 'Uploaded'])
+            compliance_rate = (uploaded_docs / total_docs * 100) if total_docs > 0 else 0
+            st.metric("Document Compliance", f"{compliance_rate:.1f}%")
+    
+    # Performance Trend Analysis
+    st.subheader("📈 Performance Trend Analysis")
+    
+    historical = data['historical']
+    if len(historical) > 1:
+        fig = px.line(
+            historical,
+            x='year',
+            y='performance_score',
+            title=f"Performance Trend ({historical['year'].min()}-{historical['year'].max()})",
+            markers=True
+        )
+        fig.update_layout(
+            xaxis_title="Year",
+            yaxis_title="Performance Score",
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # AI-Powered Insights
+    st.subheader("🤖 AI-Powered Strategic Insights")
+    
+    insights_tabs = st.tabs(["Strengths", "Weaknesses", "Opportunities", "Threats"])
+    
+    with insights_tabs[0]:
+        strengths = identify_institutional_strengths(current)
+        for strength in strengths:
+            st.success(f"✅ {strength}")
+    
+    with insights_tabs[1]:
+        weaknesses = identify_institutional_weaknesses(current)
+        for weakness in weaknesses:
+            st.error(f"❌ {weakness}")
+    
+    with insights_tabs[2]:
+        opportunities = identify_opportunities(current, analyzer)
+        for opportunity in opportunities:
+            st.info(f"💡 {opportunity}")
+    
+    with insights_tabs[3]:
+        threats = identify_threats(current, analyzer)
+        for threat in threats:
+            st.warning(f"⚠️ {threat}")
+    
+    # Predictive Analytics
+    st.subheader("🔮 Predictive Analytics")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Predict next year performance
+        if len(historical) > 2:
+            trend = historical['performance_score'].diff().mean()
+            predicted_score = min(10, max(1, current['performance_score'] + trend))
+            st.metric("Predicted Next Year Score", f"{predicted_score:.1f}/10", 
+                     delta=f"{trend:+.2f}")
+    
+    with col2:
+        # Accreditation readiness
+        readiness_score = calculate_accreditation_readiness(current, data['documents'])
+        st.metric("NAAC Accreditation Readiness", f"{readiness_score:.0f}/100")
+    
+    # Actionable Recommendations
+    st.subheader("🎯 Actionable Recommendations")
+    
+    recommendations = generate_ai_recommendations(current, data['documents'])
+    for i, rec in enumerate(recommendations[:5], 1):
+        st.write(f"{i}. **{rec['title']}**")
+        st.write(f"   {rec['description']}")
+        st.write(f"   📅 **Priority**: {rec['priority']} | ⏱️ **Timeline**: {rec['timeline']}")
+        st.divider()
+
+def get_comprehensive_institution_data(institution_id, analyzer):
+    """Get comprehensive data for intelligence analysis"""
+    try:
+        # Get current year data
+        current_data = analyzer.historical_data[
+            (analyzer.historical_data['institution_id'] == institution_id) &
+            (analyzer.historical_data['year'] == 2023)
         ]
         
-        st.write("**🏆 Top Performing Institutions**")
-        for _, inst in top_performers.iterrows():
-            st.write(f"• **{inst['institution_name']}** ({inst['performance_score']:.2f})")
-            st.write(f"  _{inst['approval_recommendation']}_")
+        if current_data.empty:
+            return None
         
-        st.markdown("---")
+        # Get historical trend (10 years)
+        historical_data = analyzer.historical_data[
+            analyzer.historical_data['institution_id'] == institution_id
+        ]
         
-        # High risk institutions
-        high_risk = df[
-            (df['year'] == 2023) & 
-            (df['risk_level'].isin(['High Risk', 'Critical Risk']))
-        ].head(5)
+        # Get document status
+        document_status = analyzer.get_institution_documents(institution_id)
         
-        if not high_risk.empty:
-            st.write("**🚨 High Risk Institutions**")
-            for _, inst in high_risk.iterrows():
-                st.write(f"• **{inst['institution_name']}** - {inst['risk_level']}")
-        
-        # Quick stats
-        st.markdown("---")
-        st.write("**📊 Quick Statistics**")
-        total_inst = len(df[df['year'] == 2023])
-        approved = len(df[(df['year'] == 2023) & (df['performance_score'] >= 7.0)])
-        st.write(f"• Total Institutions: {total_inst}")
-        st.write(f"• High Performing: {approved}")
-        st.write(f"• Approval Rate: {(approved/total_inst*100):.1f}%")
+        return {
+            'current': current_data.iloc[0].to_dict(),
+            'historical': historical_data,
+            'documents': document_status,
+            'institution_id': institution_id
+        }
+    except Exception as e:
+        st.error(f"Error loading institution data: {e}")
+        return None
+
+
 
 def create_data_management_module(analyzer):
     st.header("💾 Data Management & Upload")
@@ -4524,7 +4574,7 @@ def main():
         [
             "📊 Performance Dashboard",
             "📋 Document Analysis", 
-            "🤖 AI Reports",
+            "🤖 Intelligence Hub",
             "🔍 RAG Data Management",
             "💾 Data Management",
             # "🔄 Approval Workflow",  # REMOVED FROM THIS LIST
@@ -4539,8 +4589,8 @@ def main():
     elif app_mode == "📋 Document Analysis":
         create_document_analysis_module(analyzer)
     
-    elif app_mode == "🤖 AI Reports":
-        create_ai_analysis_reports(analyzer)
+    elif app_mode == "🤖 Intelligence Hub":
+        create_institutional_intelligence_hub(analyzer)
     
     elif app_mode == "🔍 RAG Data Management":
         create_rag_data_management(analyzer)
