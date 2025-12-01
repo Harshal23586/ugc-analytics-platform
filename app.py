@@ -264,14 +264,6 @@ curl -X GET "http://localhost:8000/institutions" \\
      -H "Authorization: Bearer smart_india_hackathon_key"
         """, language="bash")
 
-# Add to imports section at the top
-try:
-    from report_generator import PDFReportGenerator
-    PDF_REPORT_AVAILABLE = True
-except ImportError:
-    PDF_REPORT_AVAILABLE = False
-    st.warning("PDF report generation not available. Install fpdf: pip install fpdf")
-
 
 # Also update the RAGDocument class initialization
 class RAGDocument:
