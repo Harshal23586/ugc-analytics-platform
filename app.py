@@ -21,6 +21,7 @@ import os
 import tempfile
 from pathlib import Path
 from datetime import datetime
+import glob
 
 
 # RAG-specific imports
@@ -1136,54 +1137,55 @@ class InstitutionalAIAnalyzer:
         ''', self.conn, params=(institution_id,))
 
     
-    def calculate_performance_score(self, metrics: Dict) -> float:
-        """Calculate overall performance score based on weighted metrics"""
-        score = 0
-        
+    def calculate_performance_score(row):
+        """Calculate performance score for a single institution row"""
+        score = 5.0  # Base score
+    
         # NAAC Grade scoring
         naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
-        naac_score = naac_scores.get(metrics['naac_grade'], 5)
+        naac_score = naac_scores.get(row.get('naac_grade'), 5)
         score += naac_score * 0.15
-        
+    
         # NIRF Ranking scoring (inverse)
-        nirf_score = 0
-        if metrics['nirf_ranking'] and metrics['nirf_ranking'] <= 200:
-            nirf_score = (201 - metrics['nirf_ranking']) / 200 * 10
-        score += nirf_score * 0.10
-        
+        nirf_rank = row.get('nirf_ranking')
+        if nirf_rank and nirf_rank <= 200:
+            nirf_score = (201 - nirf_rank) / 200 * 10
+            score += nirf_score * 0.10
+    
         # Student-Faculty Ratio (lower is better)
-        sf_ratio_score = max(0, 10 - max(0, metrics['student_faculty_ratio'] - 15) / 3)
+        sf_ratio = row.get('student_faculty_ratio', 20)
+        sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
         score += sf_ratio_score * 0.10
-        
+    
         # PhD Faculty Ratio
-        phd_score = metrics['phd_faculty_ratio'] * 10
+        phd_ratio = row.get('phd_faculty_ratio', 0.6)
+        phd_score = phd_ratio * 10
         score += phd_score * 0.10
-        
+    
         # Research Publications
-        pub_score = min(10, metrics['publications_per_faculty'] * 3)
+        publications = row.get('research_publications', 0)
+        pub_score = min(10, publications / 10)  # 100 publications = 10 points
         score += pub_score * 0.10
-        
-        # Research Grants (log scale)
-        grant_score = min(10, np.log1p(metrics['research_grants'] / 100000) * 2.5)
-        score += grant_score * 0.10
-        
-        # Infrastructure
-        infra_score = metrics['digital_infrastructure']
-        score += infra_score * 0.10
-        
+    
+        # Digital Infrastructure
+        digital_score = row.get('digital_infrastructure_score', 7)
+        score += digital_score * 0.10
+    
         # Financial Stability
-        financial_score = metrics['financial_stability']
+        financial_score = row.get('financial_stability_score', 7.5)
         score += financial_score * 0.10
-        
+    
         # Placement Rate
-        placement_score = metrics['placement_rate'] / 10
-        score += placement_score * 0.10
-        
+        placement = row.get('placement_rate', 75)
+        placement_score = placement / 10
+        score += placement_score * 0.15
+    
         # Community Engagement
-        community_score = min(10, metrics['community_engagement'] / 1.5)
-        score += community_score * 0.05
-        
-        return min(10, score)
+        community = row.get('community_projects', 0)
+        community_score = min(10, community / 2)  # 20 projects = 10 points
+        score += community_score * 0.10
+    
+        return min(10, max(1, score))
     
     def generate_approval_recommendation(self, performance_score: float) -> str:
         """Generate approval recommendation based on performance score"""
@@ -4266,11 +4268,16 @@ def get_comprehensive_institution_data(institution_id, analyzer):
 
 
 def create_data_management_module(analyzer):
-    st.header("💾 Data Management & Upload")
+    st.header("💾 Data Management & Analysis")
     
-    tab1, tab2, tab3 = st.tabs(["📤 Upload New Data", "🔍 View Current Data", "⚙️ Database Management"])
+    # NEW TABS STRUCTURE:
+    tab1, tab2, tab3 = st.tabs([
+        "📊 Current Data Analytics",      # Former "View Current Data" - Enhanced
+        "🔍 Data Validation & QA",       # NEW - Replaces Upload
+        "⚙️ Advanced Database Tools"     # Enhanced version of Database Management
+    ])
     
-    with tab2:
+    with tab1:
         st.subheader("📊 Current Database Analytics")
         
         # Use the actual data from analyzer
@@ -4575,6 +4582,637 @@ def create_data_management_module(analyzer):
                 st.write("2. Contact institutions for missing data")
                 st.write("3. Use AI to estimate missing values")
 
+    with tab2:  # 🔍 Data Validation & QA (NEW)
+        st.subheader("🔍 Data Quality Analysis & Validation")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info("**Data Quality Checks**")
+            if st.button("🔄 Run Data Validation", type="primary"):
+                run_data_validation(analyzer)
+            
+            if st.button("📋 Show Data Completeness Report"):
+                show_data_completeness_report(analyzer)
+            
+            if st.button("⚠️ Identify Data Anomalies"):
+                identify_data_anomalies(analyzer)
+        
+        with col2:
+            st.info("**Data Enhancement Tools**")
+            if st.button("🎯 Fill Missing Values (AI)"):
+                fill_missing_values_ai(analyzer)
+            
+            if st.button("📈 Calculate Derived Metrics"):
+                calculate_derived_metrics(analyzer)
+            
+            if st.button("🔄 Update Performance Scores"):
+                update_all_performance_scores(analyzer)
+        
+        # Data Quality Dashboard
+        st.markdown("---")
+        st.subheader("📊 Data Quality Dashboard")
+        
+        # Show data quality metrics
+        quality_metrics = calculate_data_quality_metrics(analyzer)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Data Completeness", f"{quality_metrics['completeness']}%")
+        with col2:
+            st.metric("Consistency Score", f"{quality_metrics['consistency']}/10")
+        with col3:
+            st.metric("Accuracy Score", f"{quality_metrics['accuracy']}/10")
+        with col4:
+            st.metric("Timeliness Score", f"{quality_metrics['timeliness']}/10")
+    
+    with tab3:  # ⚙️ Advanced Database Tools (Enhanced)
+        st.subheader("⚙️ Advanced Database Management")
+        
+        st.warning("⚠️ **Warning**: These operations affect the entire database. Use with caution.")
+        
+        # SECTION 1: Data Backup & Restore
+        st.markdown("### 📦 Backup & Restore")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("💾 Create Backup", type="secondary", help="Create a backup of current data"):
+                create_backup(analyzer)
+        
+        with col2:
+            backup_files = get_available_backups()
+            selected_backup = st.selectbox("Select Backup to Restore", backup_files)
+            if st.button("🔄 Restore from Backup", type="secondary"):
+                restore_from_backup(analyzer, selected_backup)
+        
+        # SECTION 2: Selective Data Management
+        st.markdown("### 🎯 Selective Data Operations")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            institution_options = ["All Institutions"] + analyzer.historical_data['institution_id'].unique().tolist()
+            selected_institutions = st.multiselect("Select Institutions", institution_options[1:], default=[])
+        
+        with col2:
+            year_options = ["All Years"] + sorted(analyzer.historical_data['year'].unique().tolist())
+            selected_years = st.multiselect("Select Years", year_options[1:], default=[])
+        
+        with col3:
+            operation = st.selectbox("Operation", [
+                "Export Selected", 
+                "Update Selected",
+                "Validate Selected",
+                "Delete Selected"
+            ])
+        
+        if st.button("🚀 Execute Operation", type="primary"):
+            execute_selective_operation(analyzer, selected_institutions, selected_years, operation)
+        
+        # SECTION 3: Bulk Operations (with safety)
+        st.markdown("### ⚡ Bulk Operations")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info("**Regenerate Options**")
+            regenerate_option = st.selectbox("Regeneration Type", [
+                "Regenerate All Data (20×10)",
+                "Regenerate Current Year Only",
+                "Regenerate Performance Scores Only",
+                "Regenerate with New Parameters"
+            ])
+            
+            if st.button("🔄 Regenerate Selected", type="secondary"):
+                if st.checkbox("I understand this will overwrite existing data"):
+                    regenerate_data(analyzer, regenerate_option)
+        
+        with col2:
+            st.info("**Maintenance Operations**")
+            if st.button("🧹 Optimize Database", type="secondary"):
+                optimize_database(analyzer)
+            
+            if st.button("📊 Recalculate All Metrics", type="secondary"):
+                recalculate_all_metrics(analyzer)
+            
+            if st.button("🔍 Fix Data Inconsistencies", type="secondary"):
+                fix_data_inconsistencies(analyzer)
+        
+        # SECTION 4: System Information
+        st.markdown("---")
+        st.subheader("📋 System Information")
+        
+        db_info = get_database_information(analyzer)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("**Database Statistics:**")
+            st.write(f"- Total Records: {db_info['total_records']}")
+            st.write(f"- Last Backup: {db_info['last_backup']}")
+            st.write(f"- Database Size: {db_info['size_mb']} MB")
+        
+        with col2:
+            st.write("**Data Health:**")
+            st.write(f"- Data Age: {db_info['data_age_days']} days")
+            st.write(f"- Consistency Score: {db_info['consistency_score']}/10")
+            st.write(f"- Recommended Action: {db_info['recommended_action']}")
+
+def create_backup(analyzer):
+    """Create a timestamped backup of the database"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_dir = "backups"
+    
+    # Create backups directory if it doesn't exist
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+    
+    # Get all data from database
+    cursor = analyzer.conn.cursor()
+    
+    # Backup institutions table
+    cursor.execute("SELECT * FROM institutions")
+    institutions_data = cursor.fetchall()
+    columns = [description[0] for description in cursor.description]
+    
+    # Convert to list of dictionaries
+    institutions_list = []
+    for row in institutions_data:
+        institutions_list.append(dict(zip(columns, row)))
+    
+    # Backup other tables
+    cursor.execute("SELECT * FROM institution_documents")
+    documents_data = cursor.fetchall()
+    doc_columns = [description[0] for description in cursor.description]
+    documents_list = [dict(zip(doc_columns, row)) for row in documents_data]
+    
+    # Create backup structure
+    backup_data = {
+        'metadata': {
+            'backup_date': datetime.now().isoformat(),
+            'total_institutions': len(institutions_list),
+            'total_documents': len(documents_list),
+            'system_version': '2.0'
+        },
+        'institutions': institutions_list,
+        'documents': documents_list
+    }
+    
+    # Save to file
+    backup_file = os.path.join(backup_dir, f"backup_{timestamp}.json")
+    with open(backup_file, 'w') as f:
+        json.dump(backup_data, f, indent=2)
+    
+    st.success(f"✅ Backup created successfully: {backup_file}")
+    st.info(f"📦 Backup includes: {len(institutions_list)} institutions, {len(documents_list)} documents")
+    
+    # Also create CSV backup for Excel users
+    csv_file = os.path.join(backup_dir, f"backup_{timestamp}.csv")
+    pd.DataFrame(institutions_list).to_csv(csv_file, index=False)
+    
+    return backup_file
+
+def get_available_backups():
+    """List available backup files"""
+    backup_dir = "backups"
+    
+    if not os.path.exists(backup_dir):
+        return []
+    
+    # Get all JSON backup files
+    backup_files = glob.glob(os.path.join(backup_dir, "backup_*.json"))
+    
+    # Extract just the filenames and sort by date (newest first)
+    backup_names = []
+    for file_path in backup_files:
+        filename = os.path.basename(file_path)
+        # Extract timestamp from filename
+        try:
+            timestamp_str = filename.replace('backup_', '').replace('.json', '')
+            timestamp = datetime.strptime(timestamp_str[:15], "%Y%m%d_%H%M%S")
+            backup_names.append({
+                'filename': filename,
+                'path': file_path,
+                'date': timestamp,
+                'display': f"{timestamp.strftime('%Y-%m-%d %H:%M')} - {filename}"
+            })
+        except:
+            backup_names.append({
+                'filename': filename,
+                'path': file_path,
+                'date': datetime.now(),
+                'display': filename
+            })
+    
+    # Sort by date, newest first
+    backup_names.sort(key=lambda x: x['date'], reverse=True)
+    
+    return [b['display'] for b in backup_names[:10]]  # Return top 10 most recent
+
+def regenerate_data(analyzer, option):
+    """Regenerate data based on selected option"""
+    
+    if option == "Regenerate All Data (20×10)":
+        with st.spinner("Generating 20×10 comprehensive data..."):
+            # First create a backup
+            backup_file = create_backup(analyzer)
+            
+            # Generate new data
+            new_data = generate_comprehensive_dummy_data()
+            
+            # Save to database
+            new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+            
+            # Update the analyzer's historical data
+            analyzer.historical_data = new_data
+            
+            st.success("✅ 20×10 data regenerated successfully!")
+            st.info(f"📊 New data: {new_data['institution_id'].nunique()} institutions × {new_data['year'].nunique()} years")
+            st.warning(f"⚠️ Backup created: {os.path.basename(backup_file)}")
+    
+    elif option == "Regenerate Current Year Only":
+        with st.spinner("Regenerating current year data..."):
+            # Keep historical data, update only 2023
+            existing_data = analyzer.historical_data
+            
+            # Remove 2023 data
+            existing_data = existing_data[existing_data['year'] != 2023]
+            
+            # Generate new 2023 data for all 20 institutions
+            new_2023_data = generate_current_year_data(analyzer)
+            
+            # Combine
+            new_data = pd.concat([existing_data, new_2023_data], ignore_index=True)
+            
+            # Save to database
+            new_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+            analyzer.historical_data = new_data
+            
+            st.success("✅ Current year data regenerated!")
+    
+    elif option == "Regenerate Performance Scores Only":
+        with st.spinner("Recalculating performance scores..."):
+            updated_data = analyzer.historical_data.copy()
+            
+            # Recalculate performance scores for each row
+            for idx, row in updated_data.iterrows():
+                # Calculate new performance score based on metrics
+                new_score = calculate_performance_score(row)
+                updated_data.at[idx, 'performance_score'] = new_score
+                
+                # Update recommendation and risk level
+                updated_data.at[idx, 'approval_recommendation'] = generate_approval_recommendation(new_score)
+                updated_data.at[idx, 'risk_level'] = assess_risk_level(new_score)
+            
+            # Save updates
+            updated_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+            analyzer.historical_data = updated_data
+            
+            st.success("✅ All performance scores recalculated!")
+    
+    elif option == "Regenerate with New Parameters":
+        st.info("This would open a form to specify new generation parameters")
+        # This would show a form for custom data generation parameters
+
+def generate_current_year_data(analyzer):
+    """Generate data for current year only (2023) for all 20 institutions"""
+    np.random.seed(42)  # For reproducibility
+    
+    # Get the list of existing institutions
+    existing_data = analyzer.historical_data
+    existing_institutions = existing_data['institution_id'].unique()
+    
+    # If no existing institutions, use 20 new ones
+    if len(existing_institutions) == 0:
+        existing_institutions = [f'INST_{i:04d}' for i in range(1, 21)]
+    
+    institutions_data = []
+    
+    institution_types = ['State University', 'Private University', 'Deemed University', 'Autonomous College', 'Technical Institute']
+    states = ['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi', 'Uttar Pradesh', 'Kerala', 'Gujarat']
+    
+    for inst_id in existing_institutions[:20]:  # Ensure we only generate for 20 institutions
+        # Try to get existing institution characteristics
+        existing_inst_data = existing_data[existing_data['institution_id'] == inst_id]
+        
+        if not existing_inst_data.empty:
+            # Use existing characteristics
+            latest_row = existing_inst_data[existing_inst_data['year'] == existing_inst_data['year'].max()].iloc[0]
+            base_quality = min(0.9, max(0.3, latest_row['performance_score'] / 10))
+            inst_type = latest_row['institution_type']
+            state = latest_row['state']
+            inst_name = latest_row['institution_name']
+        else:
+            # Create new institution characteristics
+            base_quality = np.random.uniform(0.4, 0.9)
+            inst_type = np.random.choice(institution_types)
+            state = np.random.choice(states)
+            inst_name = f'{inst_type.split()[0]} University {inst_id[-3:]}'
+        
+        # Add some yearly variation (slight improvement/deterioration)
+        yearly_variation = base_quality + np.random.normal(0, 0.05)
+        yearly_variation = max(0.3, min(0.95, yearly_variation))
+        
+        # Academic Metrics
+        naac_grades = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
+        naac_probs = [0.05, 0.10, 0.15, 0.25, 0.25, 0.15, 0.05]
+        naac_grade = np.random.choice(naac_grades, p=naac_probs)
+        
+        # NIRF ranking - better institutions more likely to be ranked
+        if yearly_variation > 0.7 and np.random.random() < 0.8:
+            nirf_rank = np.random.randint(1, 101)
+        elif yearly_variation > 0.5 and np.random.random() < 0.5:
+            nirf_rank = np.random.randint(101, 201)
+        else:
+            nirf_rank = None
+        
+        # Core metrics with realistic distributions
+        student_faculty_ratio = max(10, np.random.normal(20, 5))
+        phd_faculty_ratio = np.random.beta(2, 2) * 0.6 + 0.3
+        placement_rate = max(40, min(98, np.random.normal(75 + (yearly_variation - 0.5) * 10, 8)))
+        
+        # Research & Infrastructure
+        research_publications = max(0, int(np.random.poisson(yearly_variation * 30)))
+        research_grants = max(0, int(np.random.exponential(yearly_variation * 500)))
+        digital_infrastructure = max(1, min(10, np.random.normal(7, 1.5)))
+        library_volumes = max(1000, int(np.random.normal(20000, 10000)))
+        
+        # Governance & Social Impact
+        financial_stability = max(1, min(10, np.random.normal(7.5, 1.2)))
+        compliance_score = max(1, min(10, np.random.normal(8, 1)))
+        administrative_efficiency = max(1, min(10, np.random.normal(7.2, 1.1)))
+        community_projects = np.random.poisson(yearly_variation * 8)
+        
+        # Additional metrics
+        curriculum_framework_score = max(1, min(10, np.random.normal(7.5, 1.0)))
+        faculty_diversity_index = max(1, min(10, np.random.normal(6.5, 1.2)))
+        learning_outcome_achievement = max(50, min(95, np.random.normal(75, 8)))
+        patents_filed = np.random.poisson(yearly_variation * 3)
+        industry_collaborations = np.random.poisson(yearly_variation * 6)
+        
+        # Calculate overall performance score
+        performance_score = calculate_comprehensive_performance(
+            naac_grade, nirf_rank, student_faculty_ratio, phd_faculty_ratio,
+            placement_rate, research_publications, digital_infrastructure,
+            financial_stability, community_projects, curriculum_framework_score,
+            learning_outcome_achievement, patents_filed
+        )
+        
+        institution_data = {
+            'institution_id': inst_id,
+            'institution_name': inst_name,
+            'year': 2023,
+            'institution_type': inst_type,
+            'state': state,
+            'established_year': np.random.randint(1950, 2010),
+            
+            # Academic Metrics
+            'naac_grade': naac_grade,
+            'nirf_ranking': nirf_rank,
+            'student_faculty_ratio': round(student_faculty_ratio, 1),
+            'phd_faculty_ratio': round(phd_faculty_ratio, 3),
+            'placement_rate': round(placement_rate, 1),
+            'higher_education_rate': round(max(5, min(50, np.random.normal(20, 8))), 1),
+            
+            # Research & Infrastructure
+            'research_publications': research_publications,
+            'research_grants_amount': research_grants,
+            'patents_filed': patents_filed,
+            'industry_collaborations': industry_collaborations,
+            'digital_infrastructure_score': round(digital_infrastructure, 1),
+            'library_volumes': library_volumes,
+            'laboratory_equipment_score': round(max(1, min(10, np.random.normal(7, 1.3))), 1),
+            
+            # Governance & Social Impact
+            'financial_stability_score': round(financial_stability, 1),
+            'compliance_score': round(compliance_score, 1),
+            'administrative_efficiency': round(administrative_efficiency, 1),
+            'community_projects': community_projects,
+            'rural_outreach_score': round(max(1, min(10, np.random.normal(6.8, 1.4))), 1),
+            
+            # Additional metrics
+            'curriculum_framework_score': round(curriculum_framework_score, 1),
+            'faculty_diversity_index': round(faculty_diversity_index, 1),
+            'learning_outcome_achievement': round(learning_outcome_achievement, 1),
+            'entrepreneurship_cell_score': round(max(1, min(10, np.random.normal(6.5, 1.5))), 1),
+            
+            # Overall Performance
+            'performance_score': round(performance_score, 2),
+            'approval_recommendation': generate_approval_recommendation(performance_score),
+            'risk_level': assess_risk_level(performance_score)
+        }
+        
+        institutions_data.append(institution_data)
+    
+    return pd.DataFrame(institutions_data)
+
+
+
+def run_data_validation(analyzer):
+    """Run comprehensive data validation"""
+    st.subheader("🔍 Data Validation Results")
+    
+    with st.spinner("Running data validation checks..."):
+        current_data = analyzer.historical_data
+        current_year_data = current_data[current_data['year'] == 2023]
+        
+        validation_results = {
+            'issues': [],
+            'warnings': [],
+            'checks_passed': []
+        }
+        
+        # 1. Check for missing values in critical columns
+        critical_columns = ['institution_id', 'institution_name', 'performance_score', 'risk_level']
+        missing_data = {}
+        for col in critical_columns:
+            null_count = current_year_data[col].isnull().sum()
+            if null_count > 0:
+                validation_results['issues'].append(f"❌ Missing {col}: {null_count} institutions")
+                missing_data[col] = null_count
+        
+        if not missing_data:
+            validation_results['checks_passed'].append("✅ All critical fields have complete data")
+        
+        # 2. Validate data types and ranges
+        numeric_ranges = {
+            'performance_score': (0, 10),
+            'placement_rate': (0, 100),
+            'student_faculty_ratio': (5, 50),
+            'research_publications': (0, 1000)
+        }
+        
+        for col, (min_val, max_val) in numeric_ranges.items():
+            if col in current_year_data.columns:
+                out_of_range = current_year_data[
+                    (current_year_data[col] < min_val) | (current_year_data[col] > max_val)
+                ]
+                if len(out_of_range) > 0:
+                    validation_results['issues'].append(
+                        f"❌ {col} out of range ({min_val}-{max_val}): {len(out_of_range)} records"
+                    )
+                else:
+                    validation_results['checks_passed'].append(f"✅ {col} values are within valid range")
+        
+        # 3. Check for logical consistency
+        # Performance score vs risk level consistency
+        inconsistencies = []
+        for _, row in current_year_data.iterrows():
+            score = row['performance_score']
+            risk = row['risk_level']
+            
+            if score >= 8.0 and risk != 'Low Risk':
+                inconsistencies.append(f"{row['institution_name']}: High score ({score}) but {risk}")
+            elif score < 5.0 and risk not in ['High Risk', 'Critical Risk']:
+                inconsistencies.append(f"{row['institution_name']}: Low score ({score}) but {risk}")
+        
+        if inconsistencies:
+            validation_results['warnings'].append(f"⚠️ {len(inconsistencies)} logical inconsistencies found")
+        
+        # 4. Check for duplicate records
+        duplicate_institutions = current_year_data[current_year_data.duplicated(['institution_id'], keep=False)]
+        if len(duplicate_institutions) > 0:
+            validation_results['issues'].append(f"❌ Duplicate institution records: {len(duplicate_institutions)}")
+        
+        # 5. Validate NAAC grades format
+        valid_naac = ['A++', 'A+', 'A', 'B++', 'B+', 'B', 'C']
+        invalid_naac = current_year_data[~current_year_data['naac_grade'].isin(valid_naac + [None])]
+        if len(invalid_naac) > 0:
+            validation_results['issues'].append(f"❌ Invalid NAAC grades: {len(invalid_naac)}")
+        
+        # Display results
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.error(f"**Critical Issues**: {len(validation_results['issues'])}")
+            for issue in validation_results['issues']:
+                st.write(issue)
+        
+        with col2:
+            st.warning(f"**Warnings**: {len(validation_results['warnings'])}")
+            for warning in validation_results['warnings']:
+                st.write(warning)
+        
+        with col3:
+            st.success(f"**Checks Passed**: {len(validation_results['checks_passed'])}")
+            for check in validation_results['checks_passed'][:5]:
+                st.write(check)
+        
+        # Generate summary
+        total_checks = len(validation_results['issues']) + len(validation_results['warnings']) + len(validation_results['checks_passed'])
+        validation_score = (len(validation_results['checks_passed']) / total_checks) * 100
+        
+        st.metric("Overall Validation Score", f"{validation_score:.1f}%")
+        
+        # Provide recommendations
+        if validation_results['issues']:
+            st.error("**Action Required**: Fix critical issues before proceeding")
+            if st.button("🛠️ Auto-fix Common Issues"):
+                auto_fix_issues(analyzer)
+
+def auto_fix_issues(analyzer):
+    """Automatically fix common data issues"""
+    current_data = analyzer.historical_data.copy()
+    
+    # Fix missing performance scores
+    if 'performance_score' in current_data.columns:
+        missing_scores = current_data['performance_score'].isnull()
+        if missing_scores.any():
+            # Estimate based on other metrics
+            current_data.loc[missing_scores, 'performance_score'] = 6.0  # Default
+    
+    # Fix out-of-range values
+    if 'placement_rate' in current_data.columns:
+        current_data['placement_rate'] = current_data['placement_rate'].clip(0, 100)
+    
+    # Save fixes
+    current_data.to_sql('institutions', analyzer.conn, if_exists='replace', index=False)
+    analyzer.historical_data = current_data
+    
+    st.success("✅ Common issues auto-fixed!")
+
+def calculate_data_quality_metrics(analyzer):
+    """Calculate various data quality metrics"""
+    current_data = analyzer.historical_data
+    current_year_data = current_data[current_data['year'] == 2023]
+    
+    # 1. Completeness: Percentage of non-null values
+    total_cells = current_year_data.shape[0] * current_year_data.shape[1]
+    null_cells = current_year_data.isnull().sum().sum()
+    completeness = ((total_cells - null_cells) / total_cells) * 100
+    
+    # 2. Consistency: Logical consistency between related fields
+    consistency_score = 0
+    consistency_checks = 0
+    
+    # Check performance_score vs risk_level consistency
+    correct_risk = 0
+    for _, row in current_year_data.iterrows():
+        score = row['performance_score']
+        risk = row['risk_level']
+        
+        if (score >= 8.0 and risk == 'Low Risk') or \
+           (6.0 <= score < 8.0 and risk == 'Medium Risk') or \
+           (score < 6.0 and risk in ['High Risk', 'Critical Risk']):
+            correct_risk += 1
+    
+    if len(current_year_data) > 0:
+        consistency_score += (correct_risk / len(current_year_data)) * 10
+        consistency_checks += 1
+    
+    # Check placement_rate vs performance_score correlation
+    if 'placement_rate' in current_year_data.columns and 'performance_score' in current_year_data.columns:
+        correlation = current_year_data['placement_rate'].corr(current_year_data['performance_score'])
+        if not pd.isna(correlation):
+            consistency_score += (abs(correlation) * 10)  # Higher correlation = more consistent
+            consistency_checks += 1
+    
+    final_consistency = consistency_score / consistency_checks if consistency_checks > 0 else 5.0
+    
+    # 3. Accuracy: Based on business rules and valid ranges
+    accuracy_score = 0
+    accuracy_checks = 0
+    
+    # Check if performance_score is within 0-10 range
+    if 'performance_score' in current_year_data.columns:
+        valid_scores = current_year_data[
+            (current_year_data['performance_score'] >= 0) & 
+            (current_year_data['performance_score'] <= 10)
+        ].shape[0]
+        accuracy_score += (valid_scores / len(current_year_data)) * 10
+        accuracy_checks += 1
+    
+    # Check if placement_rate is within 0-100
+    if 'placement_rate' in current_year_data.columns:
+        valid_placement = current_year_data[
+            (current_year_data['placement_rate'] >= 0) & 
+            (current_year_data['placement_rate'] <= 100)
+        ].shape[0]
+        accuracy_score += (valid_placement / len(current_year_data)) * 10
+        accuracy_checks += 1
+    
+    final_accuracy = accuracy_score / accuracy_checks if accuracy_checks > 0 else 5.0
+    
+    # 4. Timeliness: How current the data is
+    latest_year = current_data['year'].max()
+    current_year = datetime.now().year
+    years_diff = current_year - latest_year
+    
+    if years_diff == 0:
+        timeliness = 9.5
+    elif years_diff == 1:
+        timeliness = 7.0
+    elif years_diff == 2:
+        timeliness = 5.0
+    else:
+        timeliness = 3.0
+    
+    return {
+        'completeness': round(completeness, 1),
+        'consistency': round(final_consistency, 1),
+        'accuracy': round(final_accuracy, 1),
+        'timeliness': round(timeliness, 1)
+    }
 
 def generate_data_summary(data):
     """Generate and display data summary"""
