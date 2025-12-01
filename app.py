@@ -7441,7 +7441,7 @@ def main():
         return
     
     # Main header and system overview
-    #st.markdown('<h1 class="main-header">🏛️ AI-Powered Institutional Approval Analytics System</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">सुगम - SUGAM - Smart University Governance and Approval Management</h1>', unsafe_allow_html=True)
     st.markdown('<h3 class="sub-header">UGC & AICTE - Institutional Performance Tracking & Decision Support</h3>', unsafe_allow_html=True)
     
     # System overview
