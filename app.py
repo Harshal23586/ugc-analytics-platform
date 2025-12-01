@@ -1139,65 +1139,65 @@ class InstitutionalAIAnalyzer:
 
     
     def calculate_performance_score(self, *args, **kwargs) -> float:
-    """Calculate overall performance score based on weighted metrics"""
+        """Calculate overall performance score based on weighted metrics"""
     
-    # Handle different calling patterns
-    if len(args) == 1 and isinstance(args[0], dict):
-        metrics = args[0]
-    elif kwargs:
-        metrics = kwargs
-    else:
-        # Default metrics if nothing provided
-        return 5.0
+        # Handle different calling patterns
+        if len(args) == 1 and isinstance(args[0], dict):
+            metrics = args[0]
+        elif kwargs:
+            metrics = kwargs
+        else:
+            # Default metrics if nothing provided
+            return 5.0
     
-    score = 0
+        score = 0
     
-    # NAAC Grade scoring
-    naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
-    naac_score = naac_scores.get(metrics.get('naac_grade'), 5)
-    score += naac_score * 0.15
+        # NAAC Grade scoring
+        naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
+        naac_score = naac_scores.get(metrics.get('naac_grade'), 5)
+        score += naac_score * 0.15
     
-    # NIRF Ranking scoring (inverse)
-    nirf_score = 0
-    if metrics.get('nirf_ranking') and metrics['nirf_ranking'] <= 200:
-        nirf_score = (201 - metrics['nirf_ranking']) / 200 * 10
-    score += nirf_score * 0.10
+        # NIRF Ranking scoring (inverse)
+        nirf_score = 0
+        if metrics.get('nirf_ranking') and metrics['nirf_ranking'] <= 200:
+            nirf_score = (201 - metrics['nirf_ranking']) / 200 * 10
+        score += nirf_score * 0.10
     
-    # Student-Faculty Ratio (lower is better)
-    sf_ratio = metrics.get('student_faculty_ratio', 20)
-    sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
-    score += sf_ratio_score * 0.10
+        # Student-Faculty Ratio (lower is better)
+        sf_ratio = metrics.get('student_faculty_ratio', 20)
+        sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
+        score += sf_ratio_score * 0.10
     
-    # PhD Faculty Ratio
-    phd_score = metrics.get('phd_faculty_ratio', 0.6) * 10
-    score += phd_score * 0.10
+        # PhD Faculty Ratio
+        phd_score = metrics.get('phd_faculty_ratio', 0.6) * 10
+        score += phd_score * 0.10
     
-    # Research Publications per faculty
-    pub_per_faculty = metrics.get('publications_per_faculty', 0)
-    pub_score = min(10, pub_per_faculty * 3)
-    score += pub_score * 0.10
+        # Research Publications per faculty
+        pub_per_faculty = metrics.get('publications_per_faculty', 0)
+        pub_score = min(10, pub_per_faculty * 3)
+        score += pub_score * 0.10
     
-    # Research Grants (log scale)
-    grant_score = min(10, np.log1p(metrics.get('research_grants', 0) / 100000) * 2.5)
-    score += grant_score * 0.10
+        # Research Grants (log scale)
+        grant_score = min(10, np.log1p(metrics.get('research_grants', 0) / 100000) * 2.5)
+        score += grant_score * 0.10
     
-    # Infrastructure
-    infra_score = metrics.get('digital_infrastructure', 7)
-    score += infra_score * 0.10
+        # Infrastructure
+        infra_score = metrics.get('digital_infrastructure', 7)
+        score += infra_score * 0.10
     
-    # Financial Stability
-    financial_score = metrics.get('financial_stability', 7.5)
-    score += financial_score * 0.10
+        # Financial Stability
+        financial_score = metrics.get('financial_stability', 7.5)
+        score += financial_score * 0.10
     
-    # Placement Rate
-    placement_score = metrics.get('placement_rate', 70) / 10
-    score += placement_score * 0.10
+        # Placement Rate
+        placement_score = metrics.get('placement_rate', 70) / 10
+        score += placement_score * 0.10
     
-    # Community Engagement
-    community_score = min(10, metrics.get('community_engagement', 0) / 1.5)
-    score += community_score * 0.05
+        # Community Engagement
+        community_score = min(10, metrics.get('community_engagement', 0) / 1.5)
+        score += community_score * 0.05
     
-    return min(10, score)
+        return min(10, score)
     
     def generate_approval_recommendation(self, performance_score: float) -> str:
         """Generate approval recommendation based on performance score"""
