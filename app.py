@@ -5746,12 +5746,18 @@ def generate_current_year_data(analyzer):
         industry_collaborations = np.random.poisson(yearly_variation * 6)
         
         # Calculate overall performance score
-        performance_score = calculate_comprehensive_performance(
-            naac_grade, nirf_rank, student_faculty_ratio, phd_faculty_ratio,
-            placement_rate, research_publications, digital_infrastructure,
-            financial_stability, community_projects, curriculum_framework_score,
-            learning_outcome_achievement, patents_filed
-        )
+        metrics_dict = {
+            'naac_grade': naac_grade,
+            'nirf_ranking': nirf_rank,
+            'student_faculty_ratio': student_faculty_ratio,
+            'phd_faculty_ratio': phd_faculty_ratio,
+            'placement_rate': placement_rate,
+            'research_publications': research_publications,
+            'digital_infrastructure': digital_infrastructure,
+            'financial_stability': financial_stability,
+            'community_engagement': community_projects
+        }
+        performance_score = calculate_direct_performance_score(metrics_dict)
         
         institution_data = {
             'institution_id': inst_id,
@@ -6109,12 +6115,18 @@ def generate_comprehensive_dummy_data():
             research_investment_pct = max(5, min(30, np.random.normal(15, 5)))
             
             # Calculate overall performance score
-            performance_score = calculate_comprehensive_performance(
-                naac_grade, nirf_rank, student_faculty_ratio, phd_faculty_ratio,
-                placement_rate, research_publications, digital_infrastructure,
-                financial_stability, community_projects, curriculum_framework_score,
-                learning_outcome_achievement, patents_filed, governance_transparency
-            )
+            metrics_dict = {
+                'naac_grade': naac_grade,
+                'nirf_ranking': nirf_rank,
+                'student_faculty_ratio': student_faculty_ratio,
+                'phd_faculty_ratio': phd_faculty_ratio,
+                'placement_rate': placement_rate,
+                'research_publications': research_publications,
+                'digital_infrastructure': digital_infrastructure,
+                'financial_stability': financial_stability,
+                'community_engagement': community_projects  # Use correct parameter name
+            }
+            performance_score = calculate_direct_performance_score(metrics_dict)
             
             institution_data = {
                 'institution_id': f'INST_{inst_id:04d}',
@@ -6167,6 +6179,55 @@ def generate_comprehensive_dummy_data():
             institutions_data.append(institution_data)
     
     return pd.DataFrame(institutions_data)
+
+def calculate_direct_performance_score(metrics: Dict) -> float:
+    """Calculate performance score directly (for data generation)"""
+    score = 0
+    
+    # NAAC Grade scoring
+    naac_scores = {'A++': 10, 'A+': 9, 'A': 8, 'B++': 7, 'B+': 6, 'B': 5, 'C': 4}
+    naac_score = naac_scores.get(metrics.get('naac_grade'), 5)
+    score += naac_score * 0.15
+    
+    # NIRF Ranking scoring (inverse)
+    nirf_score = 0
+    nirf_rank = metrics.get('nirf_ranking')
+    if nirf_rank and nirf_rank <= 200:
+        nirf_score = (201 - nirf_rank) / 200 * 10
+    score += nirf_score * 0.10
+    
+    # Student-Faculty Ratio (lower is better)
+    sf_ratio = metrics.get('student_faculty_ratio', 20)
+    sf_ratio_score = max(0, 10 - max(0, sf_ratio - 15) / 3)
+    score += sf_ratio_score * 0.10
+    
+    # PhD Faculty Ratio
+    phd_score = metrics.get('phd_faculty_ratio', 0.6) * 10
+    score += phd_score * 0.10
+    
+    # Research Publications
+    pub_score = min(10, metrics.get('research_publications', 0) / 10)
+    score += pub_score * 0.10
+    
+    # Digital Infrastructure
+    infra_score = metrics.get('digital_infrastructure', 7)
+    score += infra_score * 0.10
+    
+    # Financial Stability
+    financial_score = metrics.get('financial_stability', 7.5)
+    score += financial_score * 0.10
+    
+    # Placement Rate
+    placement = metrics.get('placement_rate', 75)
+    placement_score = placement / 10
+    score += placement_score * 0.15
+    
+    # Community Engagement
+    community = metrics.get('community_engagement', metrics.get('community_projects', 0))
+    community_score = min(10, community / 1.5)
+    score += community_score * 0.05
+    
+    return min(10, score)
 
 def calculate_comprehensive_performance(*args):
     """Calculate overall performance score from multiple metrics"""
